@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChat } from './hooks/useChat'
-import { initProviders, getProvider, getConfigs } from './lib/providers'
+import { initProviders, getProvider } from './lib/providers'
 import { getAgentConfig } from './lib/agent'
 import { SettingsDialog } from './components/SettingsDialog'
+import { StatusBar } from './components/StatusBar'
 
 function App() {
   const { messages, isLoading, error, sendMessage, stopGeneration, clearMessages } = useChat()
@@ -207,6 +208,13 @@ function App() {
           )}
         </div>
       </div>
+
+      <StatusBar
+        providerName={providerLabel}
+        modelName={getAgentConfig().model}
+        isConnected={true}
+        messageCount={messages.length}
+      />
 
       <SettingsDialog
         open={settingsOpen}
