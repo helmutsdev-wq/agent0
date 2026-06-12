@@ -44,7 +44,7 @@ export interface ChatMessage {
 }
 
 export interface StreamChunk {
-  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'info' | 'tool_call'
+  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'info' | 'tool_call' | 'usage'
   content: string
   toolName?: string
   toolInput?: Record<string, unknown>
@@ -52,6 +52,8 @@ export interface StreamChunk {
   toolCallId?: string
   toolCallName?: string
   toolCallArgs?: string
+  inputTokens?: number
+  outputTokens?: number
 }
 
 export abstract class AIProvider {

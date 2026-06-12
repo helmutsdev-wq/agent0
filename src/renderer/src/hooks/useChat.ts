@@ -36,6 +36,7 @@ export function useChat() {
   const [statusLines, setStatusLines] = useState<string[]>([])
   const [activeModelLabel, setActiveModelLabel] = useState('')
   const [sessionStats, setSessionStats] = useState<ReturnType<typeof getSessionStats>>(getSessionStats())
+  const [realTokens, setRealTokens] = useState({ input: 0, output: 0 })
   const abortRef = useRef<AbortController | null>(null)
   const messagesRef = useRef(messages)
 
@@ -49,6 +50,7 @@ export function useChat() {
     setError(null)
     setToolEvents([])
     setStatusLines([])
+    setRealTokens({ input: 0, output: 0 })
 
     const userMsg: UIMessage = {
       id: `${Date.now()}-user`,
@@ -98,6 +100,8 @@ export function useChat() {
             })
           } else if (chunk.type === 'info') {
             setStatusLines(prev => [...prev, chunk.content])
+          } else if (chunk.type === 'usage') {
+            setRealTokens({ input: chunk.inputTokens || 0, output: chunk.outputTokens || 0 })
           } else if (chunk.type === 'error') {
             setError(chunk.content)
           } else if (chunk.type === 'tool_use') {
@@ -193,6 +197,7 @@ export function useChat() {
     statusLines,
     activeModelLabel,
     sessionStats,
+    realTokens,
     sendMessage,
     stopGeneration,
     clearMessages,

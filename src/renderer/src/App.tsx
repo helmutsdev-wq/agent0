@@ -2,10 +2,58 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChat, ToolEvent } from './hooks/useChat'
-import { initProviders } from './lib/providers'
+import { initProviders, getConfigs } from './lib/providers'
+import { setAgentConfig, getAgentConfig } from './lib/agent'
 import { SettingsDialog } from './components/SettingsDialog'
 import { useLanguage } from './lib/i18n'
 import { getUsage } from './lib/usage'
+
+function ModelSelector({ label, onSelect }: { label: string; onSelect: () => void }) {
+  const [open, setOpen] = useState(false)
+  const configs = getConfigs()
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+      >
+        {label || 'Select model'}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => setOpen(false)} />
+          <div className="absolute bottom-full left-0 mb-1 z-50 w-64 max-h-64 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] shadow-xl">
+            {configs.map(c => (
+              <div key={c.id}>
+                <div className="px-3 py-1.5 text-[10px] text-[var(--text-secondary)] font-medium uppercase">
+                  {c.name}
+                </div>
+                {c.models.map(m => (
+                  <button
+                    key={m.id}
+                    disabled={!m.available}
+                    onClick={() => {
+                      setAgentConfig({ provider: c.id, model: m.id })
+                      onSelect()
+                      setOpen(false)
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--bg-tertiary)] transition-colors ${
+                      !m.available ? 'text-[var(--text-secondary)] opacity-40 cursor-not-allowed' : 'text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {m.name}
+                    {!m.available ? ` (${m.cost === 'free' ? 'unavailable' : ''})` : ''}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 function ToolEventCard({ event }: { event: ToolEvent }) {
   const { t } = useLanguage()
@@ -125,7 +173,7 @@ function useTheme(): { theme: string; toggleTheme: () => void } {
 function App() {
   const { t } = useLanguage()
   const { theme, toggleTheme } = useTheme()
-  const { messages, isLoading, error, toolEvents, statusLines, activeModelLabel, sessionStats, sendMessage, stopGeneration, clearMessages } = useChat()
+  const { messages, isLoading, error, toolEvents, statusLines, activeModelLabel, sessionStats, realTokens, sendMessage, stopGeneration, clearMessages } = useChat()
   const [input, setInput] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -354,6 +402,26 @@ function App() {
         </div>
       </div>
 
+      {sessionStats.tokens > 0 && (
+        <div className="px-6 pb-1 shrink-0">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-[10px] text-[var(--text-secondary)] opacity-50">
+                {realTokens.input > 0
+                  ? `${realTokens.input} in / ${realTokens.output} out tokens`
+                  : `~${sessionStats.tokens} tokens`}
+              </span>
+              <div className="flex-1 h-1 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-[var(--accent)]/30 transition-all duration-500"
+                  style={{ width: `${Math.min(100, (sessionStats.tokens / 8192) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {hasMessages && (
         <div className="px-6 pb-2 shrink-0">
           <div className="max-w-3xl mx-auto">
@@ -365,12 +433,7 @@ function App() {
                 })()}
               </span>
               <span className="text-[var(--border)]">·</span>
-              <button
-                onClick={() => setSettingsOpen(true)}
-                className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-              >
-                {activeModelLabel || 'Connecting...'}
-              </button>
+              <ModelSelector label={activeModelLabel} onSelect={recheckProviders} />
               <span className="text-[var(--border)]">·</span>
               <button
                 onClick={clearMessages}

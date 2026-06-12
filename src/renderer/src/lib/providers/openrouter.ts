@@ -64,6 +64,12 @@ export class OpenRouterProvider extends AIProvider {
         return
       }
 
+      const inputTokens = parseInt(res.headers.get('x-openrouter-tokens-input') || '0')
+      const outputTokens = parseInt(res.headers.get('x-openrouter-tokens-output') || '0')
+      if (inputTokens || outputTokens) {
+        onChunk({ type: 'usage', content: '', inputTokens, outputTokens })
+      }
+
       const reader = res.body?.getReader()
       if (!reader) { onChunk({ type: 'error', content: 'OpenRouter: no response stream' }); return }
 

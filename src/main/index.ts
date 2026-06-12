@@ -70,6 +70,18 @@ function createWindow(): void {
   }
 }
 
+const appMenu = Menu.buildFromTemplate([
+  {
+    label: 'View',
+    submenu: [
+      { label: 'Zoom In', role: 'zoomIn', accelerator: 'CmdOrCtrl+Plus' },
+      { label: 'Zoom Out', role: 'zoomOut', accelerator: 'CmdOrCtrl+-' },
+      { label: 'Reset Zoom', role: 'resetZoom', accelerator: 'CmdOrCtrl+0' }
+    ]
+  }
+])
+Menu.setApplicationMenu(appMenu)
+
 app.whenReady().then(createWindow)
 
 app.on('window-all-closed', () => {
