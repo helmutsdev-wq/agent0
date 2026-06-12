@@ -186,8 +186,8 @@ function App() {
 
       <div className="px-6 pb-3 pt-2 shrink-0">
         <div className="max-w-3xl mx-auto">
-          <div className="flex items-end gap-2">
-            <div className="flex-1 relative">
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -200,7 +200,7 @@ function App() {
                 }}
                 placeholder="Type a message..."
                 rows={1}
-                className="w-full resize-none rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] px-4 py-3 pr-12 text-sm text-[var(--text-primary)] placeholder-[var(--text-secondary)] outline-none focus:border-[var(--accent)]/50 transition-colors"
+                className="w-full resize-none rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-secondary)] outline-none focus:border-[var(--accent)]/50 transition-colors"
                 style={{ minHeight: '48px', maxHeight: '200px' }}
                 onInput={e => {
                   const el = e.currentTarget
@@ -212,7 +212,7 @@ function App() {
             {isLoading ? (
               <button
                 onClick={stopGeneration}
-                className="shrink-0 w-11 h-11 rounded-xl bg-red-500/80 hover:bg-red-500 flex items-center justify-center transition-colors"
+                className="shrink-0 w-12 h-12 rounded-xl bg-red-500/80 hover:bg-red-500 flex items-center justify-center transition-colors"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                   <rect x="6" y="6" width="12" height="12" rx="2" />
@@ -222,7 +222,7 @@ function App() {
               <button
                 onClick={() => handleSend()}
                 disabled={!input.trim()}
-                className="shrink-0 w-11 h-11 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all"
+                className="shrink-0 w-12 h-12 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all"
               >
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M22 2L11 13" />
