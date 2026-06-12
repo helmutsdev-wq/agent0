@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { getConfigs, getProvider } from '../lib/providers'
 import { getAgentConfig, setAgentConfig } from '../lib/agent'
-import { Dialog, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog'
+import { SlideOver } from './ui/slideover'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
 import { Input, Label } from './ui/input'
 import { Badge } from './ui/badge'
@@ -66,13 +66,10 @@ export function SettingsDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogHeader>
-        <DialogTitle>Settings</DialogTitle>
-        <DialogDescription>
-          Configure AI providers, models, and API keys
-        </DialogDescription>
-      </DialogHeader>
+    <SlideOver open={open} onOpenChange={onOpenChange} title="Settings">
+      <p className="text-xs text-[var(--text-secondary)] mb-4">
+        Configure AI providers, models, and API keys
+      </p>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full">
@@ -294,6 +291,6 @@ export function SettingsDialog({
           </div>
         </TabsContent>
       </Tabs>
-    </Dialog>
+    </SlideOver>
   )
 }
