@@ -117,6 +117,31 @@ export function SettingsDialog({
               </select>
             </div>
 
+            <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
+              <div>
+                <Label className="cursor-pointer">Smart Routing</Label>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  Auto-select best model for each task
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  const cfg = getAgentConfig()
+                  setAgentConfig({ useRouter: !cfg.useRouter })
+                  onRecheckProviders()
+                }}
+                className={`relative w-10 h-5 rounded-full transition-colors ${
+                  agentConfig.useRouter ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                    agentConfig.useRouter ? 'translate-x-5' : ''
+                  }`}
+                />
+              </button>
+            </div>
+
             <div className="pt-2">
               <Label>Available Providers</Label>
               <div className="mt-2 space-y-2">

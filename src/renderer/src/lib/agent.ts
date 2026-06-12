@@ -1,11 +1,13 @@
 import { ChatMessage, StreamChunk } from './providers/types'
-import { getProvider, initProviders } from './providers'
+import { getProvider, initProviders, getAllModels } from './providers'
 import { executeTool, ToolCall } from './tools'
+import { classifyAndRoute } from './router'
 
 export interface AgentConfig {
   provider: string
   model: string
   systemPrompt: string
+  useRouter: boolean
 }
 
 const DEFAULT_SYSTEM_PROMPT = `You are Agent0, an AI assistant with access to tools.
@@ -23,7 +25,8 @@ Always be helpful, concise, and honest about your capabilities.`
 let currentConfig: AgentConfig = {
   provider: 'ollama',
   model: 'llama3.2',
-  systemPrompt: DEFAULT_SYSTEM_PROMPT
+  systemPrompt: DEFAULT_SYSTEM_PROMPT,
+  useRouter: true
 }
 
 export function setAgentConfig(config: Partial<AgentConfig>) {
@@ -44,11 +47,10 @@ function extractToolCalls(content: string): ToolCall[] {
       const name = match[2].trim().split('\n')[0].trim()
       calls.push({ name, input })
     } catch {
-      // skip invalid JSON
+      // skip
     }
   }
 
-  // Also try parsing JSON blocks containing tool_calls
   const jsonRegex = /```json\n([\s\S]*?)```/g
   while ((match = jsonRegex.exec(content)) !== null) {
     try {
@@ -76,13 +78,35 @@ export async function runAgent(
 ): Promise<void> {
   await initProviders()
 
-  const provider = getProvider(currentConfig.provider)
+  const userInput = messages[messages.length - 1]?.content || ''
+
+  let activeProvider = currentConfig.provider
+  let activeModel = currentConfig.model
+
+  if (currentConfig.useRouter && userInput) {
+    const allModels = getAllModels().filter(m => m.available)
+    if (allModels.length > 0) {
+      const route = classifyAndRoute(userInput, allModels)
+      if (route) {
+        activeModel = route.modelId
+        activeProvider = route.providerId
+        onChunk({
+          type: 'text',
+          content: `*Routing to **${route.task}**: ${route.providerId}/${route.modelId}*\n\n`
+        })
+      }
+    }
+  }
+
+  const provider = getProvider(activeProvider)
   if (!provider) {
-    onChunk({ type: 'error', content: `Provider "${currentConfig.provider}" not found` })
+    onChunk({
+      type: 'error',
+      content: `Provider "${activeProvider}" not found for routed model "${activeModel}"`
+    })
     return
   }
 
-  const modelId = currentConfig.model
   const systemMessages: ChatMessage[] = [
     { role: 'system', content: currentConfig.systemPrompt }
   ]
@@ -97,7 +121,7 @@ export async function runAgent(
     iteration++
     accumulatedContent = ''
 
-    await provider.chat(allMessages, modelId, (chunk) => {
+    await provider.chat(allMessages, activeModel, (chunk) => {
       if (chunk.type === 'text') {
         accumulatedContent += chunk.content
         onChunk(chunk)
@@ -125,16 +149,13 @@ export async function runAgent(
         type: 'tool_result',
         content: '',
         toolName: toolCall.name,
-        toolResult: result.output
+        toolResult: result.output || (result.error || '')
       })
 
-      allMessages.push({
-        role: 'assistant',
-        content: accumulatedContent
-      })
+      allMessages.push({ role: 'assistant', content: accumulatedContent })
       allMessages.push({
         role: 'system',
-        content: `Tool "${toolCall.name}" result:\n${result.output}`
+        content: `Tool "${toolCall.name}" result:\n${result.output || result.error || '(empty)'}`
       })
     }
   }
