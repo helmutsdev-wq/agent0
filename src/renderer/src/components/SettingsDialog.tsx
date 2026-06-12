@@ -5,6 +5,7 @@ import { Dialog, DialogHeader, DialogTitle, DialogDescription } from './ui/dialo
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
 import { Input, Label } from './ui/input'
 import { Badge } from './ui/badge'
+import { LocalModelSetup } from './LocalModelSetup'
 
 const PROVIDER_NAMES: Record<string, { label: string; color: string; docsUrl: string }> = {
   ollama: {
@@ -80,6 +81,9 @@ export function SettingsDialog({
           </TabsTrigger>
           <TabsTrigger value="keys" activeValue={activeTab} onClick={() => setActiveTab('keys')}>
             API Keys
+          </TabsTrigger>
+          <TabsTrigger value="local" activeValue={activeTab} onClick={() => setActiveTab('local')}>
+            Local Setup
           </TabsTrigger>
           <TabsTrigger value="about" activeValue={activeTab} onClick={() => setActiveTab('about')}>
             About
@@ -259,6 +263,10 @@ export function SettingsDialog({
               </p>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="local" activeValue={activeTab}>
+          <LocalModelSetup onComplete={() => forceUpdate(n => n + 1)} />
         </TabsContent>
 
         <TabsContent value="about" activeValue={activeTab}>

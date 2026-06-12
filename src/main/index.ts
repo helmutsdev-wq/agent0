@@ -1,7 +1,10 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, IpcMainEvent } from 'electron'
 import { join } from 'path'
-import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { execSync } from 'child_process'
+import { existsSync, readFileSync, writeFileSync, mkdtempSync } from 'fs'
+import { execSync, spawn, execFile } from 'child_process'
+import https from 'https'
+import http from 'http'
+import { tmpdir } from 'os'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -36,6 +39,8 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
+
+// ─── File System IPC ───────────────────────────────────────────────────
 
 ipcMain.handle('file:read', (_event, filePath: string) => {
   try {
@@ -92,4 +97,183 @@ ipcMain.handle('dir:list', (_event, dirPath: string) => {
   } catch (e) {
     return { error: (e as Error).message }
   }
+})
+
+function sendProgress(event: IpcMainEvent, data: { stage: string; percent: number; message: string }) {
+  event.sender.send('ollama:progress', data)
+}
+
+// ─── Ollama One-Click Setup ────────────────────────────────────────────
+
+function getOllamaBinary(): string {
+  if (process.platform === 'win32') {
+    const paths = [
+      'C:\\Program Files\\Ollama\\ollama.exe',
+      join(process.env.LOCALAPPDATA || '', 'Programs\\Ollama\\ollama.exe'),
+      join(process.env.USERPROFILE || '', '.ollama\\ollama.exe')
+    ]
+    for (const p of paths) {
+      if (existsSync(p)) return p
+    }
+    return 'ollama.exe'
+  }
+  return 'ollama'
+}
+
+function isOllamaInstalled(): boolean {
+  try {
+    const bin = getOllamaBinary()
+    if (!existsSync(bin) && process.platform === 'win32') return false
+    execSync(`${bin} --version`, { encoding: 'utf-8', timeout: 5000 })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function isOllamaRunning(): boolean {
+  try {
+    const bin = getOllamaBinary()
+    execSync(`${bin} list`, { encoding: 'utf-8', timeout: 5000 })
+    return true
+  } catch {
+    return false
+  }
+}
+
+ipcMain.handle('ollama:check-installed', () => {
+  return { installed: isOllamaInstalled(), running: isOllamaRunning(), platform: process.platform }
+})
+
+ipcMain.handle('ollama:download-installer', async (event) => {
+  const platform = process.platform
+  const tmpDir = mkdtempSync(join(tmpdir(), 'agent0-ollama-'))
+  let url: string
+  let dest: string
+
+  if (platform === 'win32') {
+    url = 'https://ollama.ai/download/OllamaSetup.exe'
+    dest = join(tmpDir, 'OllamaSetup.exe')
+  } else if (platform === 'darwin') {
+    url = 'https://ollama.ai/download/Ollama-darwin.zip'
+    dest = join(tmpDir, 'Ollama.zip')
+  } else {
+    sendProgress(event, { stage: 'error', percent: 0, message: 'Linux: please install via curl -fsSL https://ollama.ai/install.sh | sh' })
+    return { success: false, error: 'Use the install script for Linux' }
+  }
+
+  return new Promise((resolve) => {
+    sendProgress(event, { stage: 'downloading', percent: 0, message: 'Downloading Ollama installer...' })
+
+    const file = require('fs').createWriteStream(dest)
+    const request = https.get(url, (response) => {
+      const total = parseInt(response.headers['content-length'] || '0', 10)
+      let downloaded = 0
+
+      response.on('data', (chunk: Buffer) => {
+        downloaded += chunk.length
+        if (total > 0) {
+          const percent = Math.round((downloaded / total) * 100)
+          sendProgress(event, {
+            stage: 'downloading',
+            percent,
+            message: `Downloading installer... ${percent}% (${Math.round(downloaded / 1024 / 1024 * 10) / 10} MB)`
+          })
+        }
+      })
+
+      response.pipe(file)
+      file.on('finish', () => {
+        file.close()
+        sendProgress(event, { stage: 'downloaded', percent: 100, message: 'Download complete' })
+        resolve({ success: true, path: dest, platform })
+      })
+    })
+
+    request.on('error', (err) => {
+      sendProgress(event, { stage: 'error', percent: 0, message: `Download failed: ${err.message}` })
+      resolve({ success: false, error: err.message })
+    })
+
+    request.end()
+  })
+})
+
+ipcMain.handle('ollama:install-ollama', async (event, installerPath: string) => {
+  sendProgress(event, { stage: 'installing', percent: 50, message: 'Running installer...' })
+
+  return new Promise((resolve) => {
+    if (process.platform === 'win32') {
+      const proc = execFile(installerPath, ['/S'], (err) => {
+        if (err) {
+          sendProgress(event, { stage: 'error', percent: 0, message: `Install failed: ${err.message}` })
+          resolve({ success: false, error: err.message })
+        } else {
+          sendProgress(event, { stage: 'installed', percent: 80, message: 'Ollama installed successfully' })
+          resolve({ success: true })
+        }
+      })
+      proc.stdout?.on('data', (data) => {
+        sendProgress(event, { stage: 'installing', percent: 60, message: data.toString().trim() })
+      })
+    } else {
+      resolve({ success: false, error: 'Unsupported platform' })
+    }
+  })
+})
+
+ipcMain.handle('ollama:pull-model', async (event, modelName: string) => {
+  const bin = getOllamaBinary()
+
+  return new Promise((resolve) => {
+    sendProgress(event, { stage: 'pulling', percent: 0, message: `Pulling ${modelName}...` })
+
+    const proc = spawn(bin, ['pull', modelName], { shell: true })
+
+    proc.stdout?.on('data', (data: Buffer) => {
+      const lines = data.toString().trim().split('\n')
+      for (const line of lines) {
+        try {
+          const json = JSON.parse(line)
+          if (json.status) {
+            if (json.total && json.completed !== undefined) {
+              const percent = Math.round((json.completed / json.total) * 100)
+              const name = json.digest ? json.digest.substring(7, 19) : ''
+              sendProgress(event, {
+                stage: 'pulling',
+                percent,
+                message: name ? `Downloading layer ${name}... ${percent}%` : json.status
+              })
+            } else {
+              sendProgress(event, { stage: 'pulling', percent: 90, message: json.status })
+            }
+          }
+        } catch {
+          sendProgress(event, { stage: 'pulling', percent: 85, message: line })
+        }
+      }
+    })
+
+    proc.stderr?.on('data', (data: Buffer) => {
+      const msg = data.toString().trim()
+      if (msg) {
+        sendProgress(event, { stage: 'pulling', percent: 80, message: msg })
+      }
+    })
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        sendProgress(event, { stage: 'ready', percent: 100, message: `${modelName} is ready!` })
+        resolve({ success: true })
+      } else {
+        sendProgress(event, { stage: 'error', percent: 0, message: `Failed to pull ${modelName}` })
+        resolve({ success: false, error: `Process exited with code ${code}` })
+      }
+    })
+
+    proc.on('error', (err) => {
+      sendProgress(event, { stage: 'error', percent: 0, message: err.message })
+      resolve({ success: false, error: err.message })
+    })
+  })
 })
