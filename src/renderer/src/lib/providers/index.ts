@@ -3,11 +3,13 @@ import { OllamaProvider } from './ollama'
 import { GeminiProvider } from './gemini'
 import { GroqProvider } from './groq'
 import { HuggingFaceProvider } from './huggingface'
+import { OpenRouterProvider } from './openrouter'
 
 const providers: AIProvider[] = [
   new OllamaProvider(),
   new GeminiProvider(),
   new GroqProvider(),
+  new OpenRouterProvider(),
   new HuggingFaceProvider()
 ]
 

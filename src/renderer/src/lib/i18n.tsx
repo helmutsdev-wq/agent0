@@ -168,6 +168,7 @@ const en: Dict = {
   'provider.gemini': 'Google Gemini',
   'provider.groq': 'Groq',
   'provider.huggingface': 'Hugging Face',
+  'provider.openrouter': 'OpenRouter',
 }
 
 const lv: Dict = {
@@ -282,6 +283,7 @@ const lv: Dict = {
   'provider.gemini': 'Google Gemini',
   'provider.groq': 'Groq',
   'provider.huggingface': 'Hugging Face',
+  'provider.openrouter': 'OpenRouter',
 }
 
 const dicts: Record<Lang, Dict> = { en, lv }
