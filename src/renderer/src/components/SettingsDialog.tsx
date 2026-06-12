@@ -49,6 +49,13 @@ export function SettingsDialog({
     huggingface: localStorage.getItem('huggingface_api_key') || ''
   }))
   const [visibleKeys, setVisibleKeys] = React.useState<Record<string, boolean>>({})
+  const [copiedKey, setCopiedKey] = React.useState<string | null>(null)
+
+  function copyKey(provider: string, value: string) {
+    navigator.clipboard.writeText(value)
+    setCopiedKey(provider)
+    setTimeout(() => setCopiedKey(null), 1500)
+  }
 
   function saveApiKey(provider: string, key: string) {
     localStorage.setItem(`${provider}_api_key`, key)
@@ -255,14 +262,18 @@ export function SettingsDialog({
                   )}
                 </button>
                 <button
-                  onClick={() => { navigator.clipboard.writeText(localApiKeys.gemini) }}
-                  className="shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  onClick={() => copyKey('gemini', localApiKeys.gemini)}
+                  className={`shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors ${copiedKey === 'gemini' ? 'text-emerald-400' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
                   title="Copy"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
+                  {copiedKey === 'gemini' ? (
+                    <span className="text-[10px] font-medium">Copied!</span>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  )}
                 </button>
               </div>
               <p className="mt-1 text-xs text-[var(--text-secondary)]">
@@ -308,14 +319,18 @@ export function SettingsDialog({
                   )}
                 </button>
                 <button
-                  onClick={() => { navigator.clipboard.writeText(localApiKeys.groq) }}
-                  className="shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  onClick={() => copyKey('groq', localApiKeys.groq)}
+                  className={`shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors ${copiedKey === 'groq' ? 'text-emerald-400' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
                   title="Copy"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
+                  {copiedKey === 'groq' ? (
+                    <span className="text-[10px] font-medium">Copied!</span>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  )}
                 </button>
               </div>
               <p className="mt-1 text-xs text-[var(--text-secondary)]">
@@ -361,14 +376,18 @@ export function SettingsDialog({
                   )}
                 </button>
                 <button
-                  onClick={() => { navigator.clipboard.writeText(localApiKeys.huggingface) }}
-                  className="shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  onClick={() => copyKey('huggingface', localApiKeys.huggingface)}
+                  className={`shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors ${copiedKey === 'huggingface' ? 'text-emerald-400' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
                   title="Copy"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
+                  {copiedKey === 'huggingface' ? (
+                    <span className="text-[10px] font-medium">Copied!</span>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  )}
                 </button>
               </div>
               <p className="mt-1 text-xs text-[var(--text-secondary)]">
