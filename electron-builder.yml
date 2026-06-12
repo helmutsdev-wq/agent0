@@ -8,24 +8,10 @@ files:
   - "!node_modules/**/*"
 win:
   target:
-    - target: nsis
-      arch:
-        - x64
+    - nsis
   artifactName: "${productName}-Setup-${version}.${ext}"
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   shortcutName: Agent0
-linux:
-  target:
-    - target: AppImage
-      arch:
-        - x64
-  category: Development
-mac:
-  target:
-    - target: dmg
-      arch:
-        - x64
-        - arm64
