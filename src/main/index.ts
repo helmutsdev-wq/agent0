@@ -149,24 +149,34 @@ ipcMain.handle('dir:list', (_event, dirPath: string) => {
 ipcMain.handle('web:fetch', (_event, url: string) => {
   return new Promise((resolve) => {
     const protocol = url.startsWith('https') ? https : http
-    const req = protocol.get(url, { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }, (res) => {
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        resolve({ error: `Redirected to ${res.headers.location}. Try that URL directly.` })
+
+    function doFetch(fetchUrl: string, redirects: number) {
+      if (redirects > 5) {
+        resolve({ error: 'Too many redirects' })
         return
       }
-      let data = ''
-      res.on('data', (chunk: string) => { data += chunk })
-      res.on('end', () => {
-        resolve({ content: data.slice(0, 50000), status: res.statusCode })
+      const req = protocol.get(fetchUrl, { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }, (res) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          const redirectUrl = new URL(res.headers.location, fetchUrl).href
+          doFetch(redirectUrl, redirects + 1)
+          return
+        }
+        let data = ''
+        res.on('data', (chunk: string) => { data += chunk })
+        res.on('end', () => {
+          resolve({ content: data.slice(0, 50000), status: res.statusCode })
+        })
       })
-    })
-    req.on('error', (err) => {
-      resolve({ error: `Cannot fetch ${url}: ${err.message}` })
-    })
-    req.on('timeout', () => {
-      req.destroy()
-      resolve({ error: `Request to ${url} timed out after 15s` })
-    })
+      req.on('error', (err) => {
+        resolve({ error: `Cannot fetch ${fetchUrl}: ${err.message}` })
+      })
+      req.on('timeout', () => {
+        req.destroy()
+        resolve({ error: `Request to ${fetchUrl} timed out after 15s` })
+      })
+    }
+
+    doFetch(url, 0)
   })
 })
 

@@ -6,6 +6,7 @@ import { initProviders, getProvider } from './lib/providers'
 import { getAgentConfig } from './lib/agent'
 import { SettingsDialog } from './components/SettingsDialog'
 import { useLanguage } from './lib/i18n'
+import { getUsage } from './lib/usage'
 
 function ToolEventCard({ event }: { event: ToolEvent }) {
   const { t } = useLanguage()
@@ -363,6 +364,13 @@ function App() {
         <div className="px-6 pb-2 shrink-0">
           <div className="max-w-3xl mx-auto">
             <div className="flex items-center gap-3 px-1 py-1.5">
+              <span className="text-[11px] text-[var(--text-secondary)]">
+                {(() => {
+                  const u = getUsage()
+                  return `${u.messages} ${t('app.messages')} total`
+                })()}
+              </span>
+              <span className="text-[var(--border)]">·</span>
               <button
                 onClick={() => setSettingsOpen(true)}
                 className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"

@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { ChatMessage } from '../lib/providers/types'
 import { runAgent, setAgentConfig } from '../lib/agent'
 import { t } from '../lib/i18n'
+import { incrementMessages, incrementTools } from '../lib/usage'
 
 export interface UIMessage {
   id: string
@@ -94,6 +95,7 @@ export function useChat() {
           } else if (chunk.type === 'error') {
             setError(chunk.content)
           } else if (chunk.type === 'tool_use') {
+            incrementTools()
             setToolEvents(prev => [...prev, {
               id: `${Date.now()}-${chunk.toolName}`,
               toolName: chunk.toolName || 'tool',
@@ -124,6 +126,7 @@ export function useChat() {
         setError((err as Error).message)
       }
     } finally {
+      incrementMessages(2)
       setIsLoading(false)
       setMessages(prev => {
         const updated = [...prev]

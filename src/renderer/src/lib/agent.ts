@@ -15,7 +15,7 @@ let currentConfig: AgentConfig = {
   provider: 'ollama',
   model: 'llama3.2',
   systemPrompt: t('system.prompt'),
-  useRouter: true
+  useRouter: false
 }
 
 export function setAgentConfig(config: Partial<AgentConfig>) {
@@ -29,16 +29,20 @@ export function getAgentConfig(): AgentConfig {
 function stripToolCallFromText(text: string): string {
   let out = ''
   let i = 0
+  const marker = 'TOOL_CALL'
   while (i < text.length) {
-    const markerIdx = text.indexOf('TOOL_CALL:', i)
+    const markerIdx = text.indexOf(marker, i)
     if (markerIdx === -1) {
       out += text.slice(i)
       break
     }
     out += text.slice(i, markerIdx)
-    const jsonStart = text.indexOf('{', markerIdx)
-    if (jsonStart === -1) {
-      i = markerIdx + 'TOOL_CALL:'.length
+    const afterMarker = markerIdx + marker.length
+    const hasColon = text[afterMarker] === ':'
+    const searchFrom = hasColon ? afterMarker + 1 : afterMarker
+    const jsonStart = text.indexOf('{', searchFrom)
+    if (jsonStart === -1 || jsonStart - searchFrom > 2) {
+      i = afterMarker
       continue
     }
     let depth = 0
@@ -65,21 +69,23 @@ function stripToolCallFromText(text: string): string {
       break
     }
   }
-  return out
+  return out.replace(/TOOL{3,}/gi, '').replace(/([A-Z]{2,})\1{2,}/g, '')
 }
 
 function extractToolCalls(content: string): ToolCall[] {
   const calls: ToolCall[] = []
 
-  const marker = 'TOOL_CALL:'
+  const marker = 'TOOL_CALL'
   let searchFrom = 0
   while (true) {
     const markerIdx = content.indexOf(marker, searchFrom)
     if (markerIdx === -1) break
 
-    const jsonStart = content.indexOf('{', markerIdx + marker.length)
-    if (jsonStart === -1) {
-      searchFrom = markerIdx + marker.length
+    const afterMarker = markerIdx + marker.length
+    const searchStart = content[afterMarker] === ':' ? afterMarker + 1 : afterMarker
+    const jsonStart = content.indexOf('{', searchStart)
+    if (jsonStart === -1 || jsonStart - searchStart > 2) {
+      searchFrom = afterMarker
       continue
     }
 
@@ -236,13 +242,13 @@ export async function runAgent(
       const provider = getProvider(candidate.providerId)
       if (!provider) continue
 
-      if (candidates.indexOf(candidate) > 0) {
-        onChunk({
-          type: 'info',
-          content: t('agent.fallback', { model: activeModel, fallback: candidate.label })
-        })
-      } else if (candidate.label.includes('Routing')) {
+      const idx = candidates.indexOf(candidate)
+      if (idx === 0 && candidate.label.includes('Routing')) {
         onChunk({ type: 'info', content: candidate.label })
+      } else if (idx === 1) {
+        onChunk({ type: 'info', content: t('agent.fallback', { model: currentConfig.model, fallback: candidate.label }) })
+      } else if (idx === 2) {
+        onChunk({ type: 'info', content: t('agent.tryingOthers') })
       }
 
       activeProvider = candidate.providerId
@@ -252,6 +258,7 @@ export async function runAgent(
       let iteration = 0
       let accumulatedContent = ''
       let failed = false
+      const sessionToolKeys = new Set<string>()
 
       while (iteration < maxIterations) {
         iteration++
@@ -287,13 +294,24 @@ export async function runAgent(
 
         const seenKeys = new Set<string>()
         const uniqueCalls: ToolCall[] = []
+        let duplicateCount = 0
         for (const tc of toolCalls) {
           const key = `${tc.name}:${JSON.stringify(tc.input)}`
-          if (!seenKeys.has(key)) {
+          if (!seenKeys.has(key) && !sessionToolKeys.has(key)) {
             seenKeys.add(key)
+            sessionToolKeys.add(key)
             uniqueCalls.push(tc)
+          } else {
+            duplicateCount++
           }
-          if (uniqueCalls.length >= 3) break
+          if (uniqueCalls.length >= 3) {
+            duplicateCount += Math.max(0, toolCalls.length - uniqueCalls.length - duplicateCount)
+            break
+          }
+        }
+
+        if (duplicateCount > 0) {
+          allMessages.push({ role: 'system', content: `${duplicateCount} duplicate tool call(s) were skipped (already tried).` })
         }
 
         for (const toolCall of uniqueCalls) {

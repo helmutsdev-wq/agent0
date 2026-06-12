@@ -173,6 +173,7 @@ Always be helpful, concise, and honest about your capabilities.`,
   'agent.ollamaHint': 'Install Ollama from https://ollama.ai, run: ollama pull llama3.2, restart this app.',
   'agent.keyHint': 'Go to Settings > API Keys and add a key for Gemini or Groq.',
   'agent.fallback': 'Previously selected model "{{model}}" is not available. Falling back to **{{fallback}}**.',
+  'agent.tryingOthers': 'Still trying other models...',
   'agent.routing': 'Routing to **{{task}}**: {{provider}}/{{model}}',
   'agent.providerNotFound': 'Provider "{{provider}}" not found. Check your Settings.',
   'agent.error': 'Agent error: {{message}}',
@@ -294,13 +295,14 @@ SVARĪGI: Kad tev jāizmanto rīks, izvadi TIEŠI VIENU rindu šādā formātā 
 TOOL_CALL: {"name": "tool_name", "input": {...}}
 
 Neizvadi vairākus TOOL_CALL marķierus. Neizvadi TOOL_CALL bez derīga JSON. Viens rīks katrā atbildē. Pēc rīka rezultāta saņemšanas atbildi tieši ar atbildi. NEKAD nemini un nepateicies par rīka rezultātiem — vienkārši izmanto datus klusējot.
-Vienmēr esi izpalīdzīgs, kodolīgs un godīgs par savām spējām. Atbildi latviešu valodā, ja vien lietotājs nerunā citā valodā.`,
+Vienmēr esi izpalīdzīgs, kodolīgs un godīgs par savām spējām. Atbildi tajā pašā valodā, kurā lietotājs raksta.`,
 
   // Agent
   'agent.noModels': 'Nav pieejami AI modeļi.',
   'agent.ollamaHint': 'Instalē Ollama no https://ollama.ai, palaid: ollama pull llama3.2, pārstartē šo lietotni.',
   'agent.keyHint': 'Dodies uz Iestatījumi > API Atslēgas un pievieno atslēgu priekš Gemini vai Groq.',
   'agent.fallback': 'Iepriekš izvēlētais modelis "{{model}}" nav pieejams. Pārslēdzos uz **{{fallback}}**.',
+  'agent.tryingOthers': 'Joprojām mēģinu citus modeļus...',
   'agent.routing': 'Maršrutē uz **{{task}}**: {{provider}}/{{model}}',
   'agent.providerNotFound': 'Nodrošinātājs "{{provider}}" nav atrasts. Pārbaudi Iestatījumus.',
   'agent.error': 'Aģenta kļūda: {{message}}',
