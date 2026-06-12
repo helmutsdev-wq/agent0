@@ -37,7 +37,7 @@ export function getConfigs(): ProviderConfig[] {
 }
 
 export function getAvailableModels(): ModelConfig[] {
-  return providers.flatMap(p => p.models)
+  return providers.flatMap(p => p.models.filter(m => m.available))
 }
 
 export function getAllModels(): ModelConfig[] {

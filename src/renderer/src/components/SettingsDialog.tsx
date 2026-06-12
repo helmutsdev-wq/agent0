@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { getConfigs } from '../lib/providers'
+import { getConfigs, getProvider } from '../lib/providers'
 import { getAgentConfig, setAgentConfig } from '../lib/agent'
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
@@ -33,8 +33,9 @@ export function SettingsDialog({
   onOpenChange: (open: boolean) => void
   onRecheckProviders: () => void
 }) {
-  const configs = getConfigs()
-  const agentConfig = getAgentConfig()
+  const [, forceUpdate] = React.useState(0)
+  const configs = React.useMemo(() => getConfigs(), [open])
+  const agentConfig = React.useMemo(() => getAgentConfig(), [open])
   const [activeTab, setActiveTab] = React.useState('models')
   const [localApiKeys, setLocalApiKeys] = React.useState<Record<string, string>>(() => ({
     gemini: localStorage.getItem('gemini_api_key') || '',
@@ -44,6 +45,17 @@ export function SettingsDialog({
   function saveApiKey(provider: string, key: string) {
     localStorage.setItem(`${provider}_api_key`, key)
     setLocalApiKeys(prev => ({ ...prev, [provider]: key }))
+  }
+
+  function handleProviderChange(providerId: string) {
+    setAgentConfig({ provider: providerId })
+    const p = getProvider(providerId)
+    const firstAvailable = p?.models.find(m => m.available)
+    if (firstAvailable) {
+      setAgentConfig({ model: firstAvailable.id })
+    }
+    onRecheckProviders()
+    forceUpdate(n => n + 1)
   }
 
   return (
@@ -74,10 +86,7 @@ export function SettingsDialog({
               <Label>Active Provider</Label>
               <select
                 value={agentConfig.provider}
-                onChange={e => {
-                  setAgentConfig({ provider: e.target.value })
-                  onRecheckProviders()
-                }}
+                onChange={e => handleProviderChange(e.target.value)}
                 className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
               >
                 {configs.map(c => (
@@ -92,7 +101,10 @@ export function SettingsDialog({
               <Label>Active Model</Label>
               <select
                 value={agentConfig.model}
-                onChange={e => setAgentConfig({ model: e.target.value })}
+                onChange={e => {
+                  setAgentConfig({ model: e.target.value })
+                  forceUpdate(n => n + 1)
+                }}
                 className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
               >
                 {configs

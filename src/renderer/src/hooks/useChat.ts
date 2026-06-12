@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { ChatMessage } from '../lib/providers/types'
-import { runAgent, AgentConfig, setAgentConfig, getAgentConfig } from '../lib/agent'
+import { runAgent, setAgentConfig } from '../lib/agent'
 
 export interface UIMessage {
   id: string
@@ -20,23 +20,30 @@ export function useChat() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const messagesRef = useRef(messages)
+
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return
 
     setError(null)
     const userMsg: UIMessage = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-user`,
       role: 'user',
       content: content.trim()
     }
 
     const assistantMsg: UIMessage = {
-      id: (Date.now() + 1).toString(),
+      id: `${Date.now()}-assistant`,
       role: 'assistant',
       content: '',
       isStreaming: true
     }
+
+    const currentMessages = messagesRef.current
 
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setIsLoading(true)
@@ -45,7 +52,7 @@ export function useChat() {
     abortRef.current = abortController
 
     const chatMessages: ChatMessage[] = [
-      ...messages
+      ...currentMessages
         .filter(m => m.id !== 'welcome')
         .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       { role: 'user' as const, content: content.trim() }
@@ -62,7 +69,7 @@ export function useChat() {
             setMessages(prev => {
               const updated = [...prev]
               const last = updated[updated.length - 1]
-              if (last && last.isStreaming) {
+              if (last?.isStreaming) {
                 updated[updated.length - 1] = { ...last, content: fullResponse }
               }
               return updated
@@ -70,23 +77,23 @@ export function useChat() {
           } else if (chunk.type === 'error') {
             setError(chunk.content)
           } else if (chunk.type === 'tool_use') {
-            const toolMsg = `\n\n*Using tool: ${chunk.toolName}...*\n`
+            const toolMsg = `\n\n_Using **${chunk.toolName}**..._\n`
             fullResponse += toolMsg
             setMessages(prev => {
               const updated = [...prev]
               const last = updated[updated.length - 1]
-              if (last && last.isStreaming) {
+              if (last?.isStreaming) {
                 updated[updated.length - 1] = { ...last, content: fullResponse }
               }
               return updated
             })
           } else if (chunk.type === 'tool_result') {
-            const resultMsg = `\`\`\`\n${chunk.toolResult}\n\`\`\`\n`
+            const resultMsg = `\`\`\`tool-result\n${chunk.toolResult}\n\`\`\`\n`
             fullResponse += resultMsg
             setMessages(prev => {
               const updated = [...prev]
               const last = updated[updated.length - 1]
-              if (last && last.isStreaming) {
+              if (last?.isStreaming) {
                 updated[updated.length - 1] = { ...last, content: fullResponse }
               }
               return updated
@@ -104,14 +111,14 @@ export function useChat() {
       setMessages(prev => {
         const updated = [...prev]
         const last = updated[updated.length - 1]
-        if (last && last.isStreaming) {
+        if (last?.isStreaming) {
           updated[updated.length - 1] = { ...last, isStreaming: false }
         }
         return updated
       })
       abortRef.current = null
     }
-  }, [messages, isLoading])
+  }, [isLoading])
 
   const stopGeneration = useCallback(() => {
     abortRef.current?.abort()
@@ -119,7 +126,7 @@ export function useChat() {
     setMessages(prev => {
       const updated = [...prev]
       const last = updated[updated.length - 1]
-      if (last && last.isStreaming) {
+      if (last?.isStreaming) {
         updated[updated.length - 1] = { ...last, isStreaming: false }
       }
       return updated
@@ -137,7 +144,7 @@ export function useChat() {
     setError(null)
   }, [])
 
-  const updateConfig = useCallback((config: Partial<AgentConfig>) => {
+  const updateConfig = useCallback((config: Parameters<typeof setAgentConfig>[0]) => {
     setAgentConfig(config)
   }, [])
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChat } from './hooks/useChat'
@@ -6,6 +6,48 @@ import { initProviders, getProvider } from './lib/providers'
 import { getAgentConfig } from './lib/agent'
 import { SettingsDialog } from './components/SettingsDialog'
 import { StatusBar } from './components/StatusBar'
+
+const markdownComponents = {
+  code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
+    const match = /language-(\w+)/.exec(className || '')
+    const isInline = !match && !className
+    if (isInline) {
+      return (
+        <code className="px-1 py-0.5 rounded bg-[var(--bg-primary)] text-xs" {...props}>
+          {children}
+        </code>
+      )
+    }
+    return (
+      <div className="relative my-2">
+        <div className="flex items-center justify-between px-3 py-1.5 rounded-t-lg bg-[var(--bg-primary)] border-b border-[var(--border)]">
+          <span className="text-[10px] text-[var(--text-secondary)] uppercase">
+            {match?.[1] || 'code'}
+          </span>
+          <button
+            onClick={() => navigator.clipboard.writeText(String(children))}
+            className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            Copy
+          </button>
+        </div>
+        <code className={`block px-3 py-2 rounded-b-lg bg-[var(--bg-primary)] text-xs overflow-x-auto ${className || ''}`} {...props}>
+          {children}
+        </code>
+      </div>
+    )
+  },
+  pre({ children }: { children?: React.ReactNode }) {
+    return <>{children}</>
+  },
+  a({ href, children }: { href?: string; children?: React.ReactNode }) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">
+        {children}
+      </a>
+    )
+  }
+}
 
 function App() {
   const { messages, isLoading, error, sendMessage, stopGeneration, clearMessages } = useChat()
@@ -26,20 +68,20 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  function recheckProviders() {
+  const recheckProviders = useCallback(() => {
     initProviders().then(() => {
       const cfg = getAgentConfig()
       const p = getProvider(cfg.provider)
       setProviderLabel(p?.name || 'Ollama')
     })
-  }
+  }, [])
 
-  async function handleSend() {
+  const handleSend = useCallback(async () => {
     if (!input.trim() || isLoading) return
     const content = input.trim()
     setInput('')
     await sendMessage(content)
-  }
+  }, [input, isLoading, sendMessage])
 
   return (
     <div className="flex flex-col h-full">
@@ -93,50 +135,7 @@ function App() {
                 <div className="prose prose-invert prose-sm max-w-none">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
-                    components={{
-                      code({ className, children, ...props }) {
-                        const match = /language-(\w+)/.exec(className || '')
-                        const isInline = !match && !className
-                        if (isInline) {
-                          return (
-                            <code className="px-1 py-0.5 rounded bg-[var(--bg-primary)] text-xs" {...props}>
-                              {children}
-                            </code>
-                          )
-                        }
-                        return (
-                          <div className="relative my-2">
-                            <div className="flex items-center justify-between px-3 py-1.5 rounded-t-lg bg-[var(--bg-primary)] border-b border-[var(--border)]">
-                              <span className="text-[10px] text-[var(--text-secondary)] uppercase">
-                                {match?.[1] || 'code'}
-                              </span>
-                              <button
-                                onClick={() => navigator.clipboard.writeText(String(children))}
-                                className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                              >
-                                Copy
-                              </button>
-                            </div>
-                            <code
-                              className={`block px-3 py-2 rounded-b-lg bg-[var(--bg-primary)] text-xs overflow-x-auto ${className || ''}`}
-                              {...props}
-                            >
-                              {children}
-                            </code>
-                          </div>
-                        )
-                      },
-                      pre({ children }) {
-                        return <>{children}</>
-                      },
-                      a({ href, children }) {
-                        return (
-                          <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">
-                            {children}
-                          </a>
-                        )
-                      }
-                    }}
+                    components={markdownComponents}
                   >
                     {msg.content || (msg.isStreaming ? '' : '...')}
                   </ReactMarkdown>
