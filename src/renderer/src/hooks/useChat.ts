@@ -3,6 +3,8 @@ import { ChatMessage } from '../lib/providers/types'
 import { runAgent, setAgentConfig } from '../lib/agent'
 import { t } from '../lib/i18n'
 import { incrementMessages, incrementTools } from '../lib/usage'
+import { getAgentConfig } from '../lib/agent'
+import { getProvider } from '../lib/providers'
 
 export interface UIMessage {
   id: string
@@ -32,6 +34,7 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null)
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
   const [statusLines, setStatusLines] = useState<string[]>([])
+  const [activeModelLabel, setActiveModelLabel] = useState('')
   const abortRef = useRef<AbortController | null>(null)
   const messagesRef = useRef(messages)
 
@@ -137,6 +140,10 @@ export function useChat() {
         return updated
       })
       abortRef.current = null
+      const cfg = getAgentConfig()
+      const p = getProvider(cfg.provider)
+      const m = p?.models.find(m => m.id === cfg.model)
+      setActiveModelLabel(`${p?.name || cfg.provider} / ${m?.name || cfg.model}`)
     }
   }, [isLoading])
 
@@ -176,6 +183,7 @@ export function useChat() {
     error,
     toolEvents,
     statusLines,
+    activeModelLabel,
     sendMessage,
     stopGeneration,
     clearMessages,

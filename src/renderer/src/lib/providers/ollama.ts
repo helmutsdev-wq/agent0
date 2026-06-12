@@ -1,6 +1,20 @@
 import { AIProvider, ChatMessage, ModelConfig, StreamChunk } from './types'
 import { TOOL_DEFS } from '../toolDefs'
 
+function extractInlineFunctions(content: string): Array<{ name: string; args: string }> | null {
+  const funcs: Array<{ name: string; args: string }> = []
+  const regex = /<function\/([^>]+)>(\{[\s\S]*?\})<\/function>/g
+  let match
+  while ((match = regex.exec(content)) !== null) {
+    funcs.push({ name: match[1], args: match[2] })
+  }
+  return funcs.length > 0 ? funcs : null
+}
+
+function stripInlineFunctions(content: string): string {
+  return content.replace(/<function\/[^>]+>\{[\s\S]*?\}<\/function>/g, '')
+}
+
 interface OllamaModel {
   name: string
   modified_at: string
@@ -145,7 +159,33 @@ export class OllamaProvider extends AIProvider {
               sawDone = true
               onChunk({ type: 'done', content: '' })
             } else if (json.message?.content !== undefined && json.message?.content !== '') {
-              onChunk({ type: 'text', content: json.message.content })
+              const inlineFuncs = extractInlineFunctions(json.message.content)
+              if (inlineFuncs) {
+                for (const fn of inlineFuncs) {
+                  onChunk({
+                    type: 'tool_call',
+                    content: '',
+                    toolCallId: fn.name,
+                    toolCallName: fn.name,
+                    toolCallArgs: fn.args
+                  })
+                  try {
+                    const input = JSON.parse(fn.args)
+                    onChunk({
+                      type: 'tool_use',
+                      content: `Using ${fn.name}...`,
+                      toolName: fn.name,
+                      toolInput: input
+                    })
+                  } catch { /* */ }
+                }
+                const cleaned = stripInlineFunctions(json.message.content)
+                if (cleaned.trim()) {
+                  onChunk({ type: 'text', content: cleaned })
+                }
+              } else {
+                onChunk({ type: 'text', content: json.message.content })
+              }
             }
             if (json.message?.tool_calls) {
               for (const tc of json.message.tool_calls) {
