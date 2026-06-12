@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { ChatMessage } from '../lib/providers/types'
 import { runAgent, setAgentConfig } from '../lib/agent'
 import { t } from '../lib/i18n'
-import { incrementMessages, incrementTools } from '../lib/usage'
+import { incrementMessages, incrementTools, addToSession, getSessionStats, clearSession } from '../lib/usage'
 import { getAgentConfig } from '../lib/agent'
 import { getProvider } from '../lib/providers'
 
@@ -35,6 +35,7 @@ export function useChat() {
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
   const [statusLines, setStatusLines] = useState<string[]>([])
   const [activeModelLabel, setActiveModelLabel] = useState('')
+  const [sessionStats, setSessionStats] = useState<ReturnType<typeof getSessionStats>>(getSessionStats())
   const abortRef = useRef<AbortController | null>(null)
   const messagesRef = useRef(messages)
 
@@ -78,6 +79,8 @@ export function useChat() {
     ]
 
     let fullResponse = ''
+    let toolCount = 0
+    const inputChars = content.trim().length
 
     try {
       await runAgent(
@@ -98,6 +101,7 @@ export function useChat() {
           } else if (chunk.type === 'error') {
             setError(chunk.content)
           } else if (chunk.type === 'tool_use') {
+            toolCount++
             incrementTools()
             setToolEvents(prev => [...prev, {
               id: `${Date.now()}-${chunk.toolName}`,
@@ -140,6 +144,8 @@ export function useChat() {
         return updated
       })
       abortRef.current = null
+      addToSession(inputChars, fullResponse.length, toolCount)
+      setSessionStats(getSessionStats())
       const cfg = getAgentConfig()
       const p = getProvider(cfg.provider)
       const m = p?.models.find(m => m.id === cfg.model)
@@ -171,6 +177,8 @@ export function useChat() {
     setError(null)
     setToolEvents([])
     setStatusLines([])
+    clearSession()
+    setSessionStats(getSessionStats())
   }, [])
 
   const updateConfig = useCallback((config: Parameters<typeof setAgentConfig>[0]) => {
@@ -184,6 +192,7 @@ export function useChat() {
     toolEvents,
     statusLines,
     activeModelLabel,
+    sessionStats,
     sendMessage,
     stopGeneration,
     clearMessages,

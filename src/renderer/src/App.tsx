@@ -125,7 +125,7 @@ function useTheme(): { theme: string; toggleTheme: () => void } {
 function App() {
   const { t } = useLanguage()
   const { theme, toggleTheme } = useTheme()
-  const { messages, isLoading, error, toolEvents, statusLines, activeModelLabel, sendMessage, stopGeneration, clearMessages } = useChat()
+  const { messages, isLoading, error, toolEvents, statusLines, activeModelLabel, sessionStats, sendMessage, stopGeneration, clearMessages } = useChat()
   const [input, setInput] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -382,6 +382,15 @@ function App() {
               <span className="text-[11px] text-[var(--text-secondary)]">
                 {messages.length - 1} {t('app.messages')}
               </span>
+            </div>
+          </div>
+        </div>
+      )}
+      {sessionStats.messages > 0 && (
+        <div className="px-6 pb-1 shrink-0">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-[10px] text-[var(--text-secondary)] opacity-50 px-1">
+              {sessionStats.label}
             </div>
           </div>
         </div>
