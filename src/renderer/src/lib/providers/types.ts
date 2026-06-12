@@ -24,7 +24,7 @@ export interface ChatMessage {
 }
 
 export interface StreamChunk {
-  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done'
+  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'info'
   content: string
   toolName?: string
   toolInput?: Record<string, unknown>

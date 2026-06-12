@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { ChatMessage } from '../lib/providers/types'
 import { runAgent, setAgentConfig } from '../lib/agent'
+import { t } from '../lib/i18n'
 
 export interface UIMessage {
   id: string
@@ -23,12 +24,13 @@ export function useChat() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: "Hi! I'm Agent0. I can help you with coding, research, and tasks using multiple AI models. What would you like to do?"
+      content: t('welcome')
     }
   ])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
+  const [statusLines, setStatusLines] = useState<string[]>([])
   const abortRef = useRef<AbortController | null>(null)
   const messagesRef = useRef(messages)
 
@@ -41,6 +43,7 @@ export function useChat() {
 
     setError(null)
     setToolEvents([])
+    setStatusLines([])
 
     const userMsg: UIMessage = {
       id: `${Date.now()}-user`,
@@ -86,6 +89,8 @@ export function useChat() {
               }
               return updated
             })
+          } else if (chunk.type === 'info') {
+            setStatusLines(prev => [...prev, chunk.content])
           } else if (chunk.type === 'error') {
             setError(chunk.content)
           } else if (chunk.type === 'tool_use') {
@@ -150,11 +155,12 @@ export function useChat() {
       {
         id: 'welcome',
         role: 'assistant',
-        content: "Hi! I'm Agent0. I can help you with coding, research, and tasks using multiple AI models. What would you like to do?"
+        content: t('welcome')
       }
     ])
     setError(null)
     setToolEvents([])
+    setStatusLines([])
   }, [])
 
   const updateConfig = useCallback((config: Parameters<typeof setAgentConfig>[0]) => {
@@ -166,6 +172,7 @@ export function useChat() {
     isLoading,
     error,
     toolEvents,
+    statusLines,
     sendMessage,
     stopGeneration,
     clearMessages,

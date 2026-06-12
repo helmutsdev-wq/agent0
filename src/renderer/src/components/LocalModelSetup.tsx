@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useLanguage } from '../lib/i18n'
 
 interface SetupState {
   status: 'checking' | 'ready' | 'downloading' | 'installing' | 'pulling' | 'error' | 'complete'
@@ -19,22 +20,23 @@ const MODELS = [
 
 const TOTAL_STEPS = 3
 
-function getStepInfo(status: string): { step: number; label: string } {
+function getStepInfo(status: string, t: (k: string) => string): { step: number; label: string } {
   switch (status) {
-    case 'downloading': return { step: 1, label: 'Downloading Ollama installer' }
-    case 'installing': return { step: 2, label: 'Installing Ollama' }
-    case 'pulling': return { step: 3, label: 'Downloading AI model' }
+    case 'downloading': return { step: 1, label: t('local.step1') }
+    case 'installing': return { step: 2, label: t('local.step2') }
+    case 'pulling': return { step: 3, label: t('local.step3') }
     default: return { step: 0, label: '' }
   }
 }
 
 export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
+  const { t } = useLanguage()
   const [state, setState] = React.useState<SetupState>({
     status: 'checking',
     installed: false,
     running: false,
     progress: 0,
-    message: 'Checking Ollama...',
+    message: t('local.checking'),
     platform: 'win32'
   })
   const [selectedModel, setSelectedModel] = React.useState('llama3.2')
@@ -55,17 +57,17 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
         running: result.running,
         platform: result.platform,
         message: result.installed && result.running
-          ? 'Ollama is running'
+          ? t('local.running')
           : result.installed
-            ? 'Ollama installed but not running'
-            : 'Ollama is not installed',
+            ? t('local.installedNotRunning')
+            : t('local.notInstalled'),
         progress: result.installed && result.running ? 100 : 0
       }))
     } catch {
       setState(prev => ({
         ...prev,
         status: 'error',
-        message: 'Could not check Ollama status'
+        message: t('local.checkFailed')
       }))
     }
   }
@@ -91,40 +93,40 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
   }, [onComplete])
 
   async function startSetup() {
-    setState(prev => ({ ...prev, status: 'downloading', progress: 0, message: 'Starting download...' }))
+    setState(prev => ({ ...prev, status: 'downloading', progress: 0, message: t('local.startDownload') }))
 
     const dl = await window.electronAPI.ollama.downloadInstaller()
     if (!dl.success) {
-      setState(prev => ({ ...prev, status: 'error', message: dl.error || 'Download failed' }))
+      setState(prev => ({ ...prev, status: 'error', message: dl.error || t('local.downloadFailed') }))
       return
     }
 
     setState(prev => ({ ...prev, installerPath: dl.path }))
 
     if (dl.platform === 'linux') {
-      setState(prev => ({ ...prev, status: 'ready', installed: true, running: false, message: 'On Linux, please install Ollama via: curl -fsSL https://ollama.ai/install.sh | sh. Then restart this app.' }))
+      setState(prev => ({ ...prev, status: 'ready', installed: true, running: false, message: t('local.linuxHint') }))
       return
     }
 
     const install = await window.electronAPI.ollama.installOllama(dl.path!)
     if (!install.success) {
-      setState(prev => ({ ...prev, status: 'error', message: install.error || 'Install failed' }))
+      setState(prev => ({ ...prev, status: 'error', message: install.error || t('local.installFailed') }))
       return
     }
 
-    setState(prev => ({ ...prev, status: 'pulling', progress: 0, message: `Downloading ${selectedModel} model...` }))
+    setState(prev => ({ ...prev, status: 'pulling', progress: 0, message: t('local.step3') + '...' }))
 
     const pull = await window.electronAPI.ollama.pullModel(selectedModel)
     if (!pull.success) {
-      setState(prev => ({ ...prev, status: 'error', message: pull.error || 'Model pull failed' }))
+      setState(prev => ({ ...prev, status: 'error', message: pull.error || t('local.modelPullFailed') }))
     }
   }
 
   async function skipInstall() {
-    setState(prev => ({ ...prev, status: 'pulling', progress: 0, message: `Downloading ${selectedModel} model...` }))
+    setState(prev => ({ ...prev, status: 'pulling', progress: 0, message: t('local.step3') + '...' }))
     const pull = await window.electronAPI.ollama.pullModel(selectedModel)
     if (!pull.success) {
-      setState(prev => ({ ...prev, status: 'error', message: pull.error || 'Model pull failed' }))
+      setState(prev => ({ ...prev, status: 'error', message: pull.error || t('local.modelPullFailed') }))
     }
   }
 
@@ -136,17 +138,18 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
             <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
             <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
-          <span className="text-sm font-medium">Ollama is ready</span>
+          <span className="text-sm font-medium">{t('local.ready')}</span>
         </div>
         <p className="text-xs text-[var(--text-secondary)]">
-          {selectedModel} is installed and running locally. All processing is free and offline.
+          {selectedModel} {t('local.readyDesc')}
         </p>
       </div>
     )
   }
 
   const isBusy = state.status === 'downloading' || state.status === 'installing' || state.status === 'pulling'
-  const stepInfo = getStepInfo(state.status)
+  const stepInfo = getStepInfo(state.status, t)
+  const modelSize = MODELS.find(m => m.id === selectedModel)?.size || ''
 
   return (
     <div className="space-y-3">
@@ -156,7 +159,7 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
           </svg>
         </div>
-        <span className="text-sm font-medium">Local AI Setup</span>
+        <span className="text-sm font-medium">{t('local.title')}</span>
       </div>
 
       {isBusy && (
@@ -164,7 +167,7 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
             <span className="text-xs text-[var(--text-primary)] font-medium">
-              Step {stepInfo.step}/{TOTAL_STEPS}: {stepInfo.label}
+              {t('local.step1').split(' ')[0]} {stepInfo.step}/{TOTAL_STEPS}: {stepInfo.label}
             </span>
           </div>
           <div className="h-1.5 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
@@ -178,9 +181,9 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
             <span className="text-[var(--text-secondary)]">{state.progress}%</span>
           </div>
           <p className="text-[10px] text-[var(--text-secondary)]">
-            {state.status === 'downloading' && 'Downloading the Ollama installer (~300 MB). Speed depends on your connection.'}
-            {state.status === 'installing' && 'Running silent installer. This can take 1-2 minutes with no visible window.'}
-            {state.status === 'pulling' && `Downloading the ${selectedModel} AI model (${MODELS.find(m => m.id === selectedModel)?.size || 'several GB'}). This is the largest step.`}
+            {state.status === 'downloading' && t('local.step1desc')}
+            {state.status === 'installing' && t('local.step2desc')}
+            {state.status === 'pulling' && t('local.step3desc', { model: selectedModel, size: modelSize })}
           </p>
         </div>
       )}
@@ -188,7 +191,7 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
       {!isBusy && (
         <div className="rounded-lg bg-[var(--bg-tertiary)] p-3 space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-[var(--text-secondary)]">Status</span>
+            <span className="text-[var(--text-secondary)]">{t('local.status')}</span>
             <span className={
               state.status === 'error' ? 'text-red-400' :
               'text-[var(--text-primary)]'
@@ -198,7 +201,7 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
           </div>
 
           <div className="flex items-center justify-between text-xs">
-            <span className="text-[var(--text-secondary)]">Model</span>
+            <span className="text-[var(--text-secondary)]">{t('local.model')}</span>
             <select
               value={selectedModel}
               onChange={e => setSelectedModel(e.target.value)}
@@ -219,18 +222,20 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
           onClick={startSetup}
           className="w-full py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
         >
-          One-Click Install Ollama
+          {t('local.install')}
         </button>
       )}
 
       {state.status === 'ready' && state.installed && !state.running && (
         <div className="space-y-2">
-          <p className="text-xs text-amber-400">Ollama is installed but not running. Start it from the Start Menu or run <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">ollama serve</code> in a terminal.</p>
+          <p className="text-xs text-amber-400">
+            {t('local.installedNotRunningHint')} <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">ollama serve</code> {t('local.inTerminal')}
+          </p>
           <button
             onClick={skipInstall}
             className="w-full py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
           >
-            Pull Model Only
+            {t('local.pullOnly')}
           </button>
         </div>
       )}
@@ -242,14 +247,14 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
             onClick={checkStatus}
             className="w-full py-2 rounded-lg border border-[var(--border)] text-sm text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors"
           >
-            Retry
+            {t('local.retry')}
           </button>
         </div>
       )}
 
-      {state.status === 'ready' && (
+      {state.status === 'ready' && !state.installed && (
         <p className="text-xs text-[var(--text-secondary)]">
-          Downloads and installs Ollama locally. All AI processing runs on your machine — no internet needed after setup.
+          {t('local.readyDesc')}
         </p>
       )}
     </div>

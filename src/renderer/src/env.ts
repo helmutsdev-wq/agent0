@@ -16,6 +16,9 @@ declare global {
       dir: {
         list: (dirPath: string) => Promise<{ items?: Array<{ name: string; isDir: boolean; size: number }>; error?: string }>
       }
+      web: {
+        fetch: (url: string) => Promise<{ content?: string; status?: number; error?: string }>
+      }
       ollama: {
         checkInstalled: () => Promise<{ installed: boolean; running: boolean; platform: string }>
         downloadInstaller: () => Promise<{ success: boolean; path?: string; error?: string; platform?: string }>

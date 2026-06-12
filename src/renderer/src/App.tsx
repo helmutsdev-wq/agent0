@@ -5,8 +5,10 @@ import { useChat, ToolEvent } from './hooks/useChat'
 import { initProviders, getProvider } from './lib/providers'
 import { getAgentConfig } from './lib/agent'
 import { SettingsDialog } from './components/SettingsDialog'
+import { useLanguage } from './lib/i18n'
 
 function ToolEventCard({ event }: { event: ToolEvent }) {
+  const { t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
   const isRunning = event.status === 'running'
 
@@ -28,7 +30,7 @@ function ToolEventCard({ event }: { event: ToolEvent }) {
           </svg>
         )}
         <span className="text-[var(--text-secondary)]">
-          {isRunning ? 'Running' : event.isError ? 'Failed' : 'Completed'}{' '}
+          {isRunning ? t('tool.running') : event.isError ? t('tool.failed') : t('tool.completed')}{' '}
           <span className="text-[var(--text-primary)] font-medium">{event.toolName}</span>
         </span>
         <span className="text-[var(--text-secondary)] ml-auto text-[10px]">
@@ -39,7 +41,7 @@ function ToolEventCard({ event }: { event: ToolEvent }) {
         <div className="px-3 pb-2 space-y-1.5 text-[10px]">
           {event.toolInput && Object.keys(event.toolInput).length > 0 && (
             <div>
-              <span className="text-[var(--text-secondary)]">Input: </span>
+              <span className="text-[var(--text-secondary)]">{t('tool.input')}: </span>
               <code className="text-[var(--text-primary)] bg-[var(--bg-primary)] px-1 py-0.5 rounded">
                 {JSON.stringify(event.toolInput)}
               </code>
@@ -47,7 +49,7 @@ function ToolEventCard({ event }: { event: ToolEvent }) {
           )}
           {event.result && (
             <div>
-              <span className="text-[var(--text-secondary)]">Result: </span>
+              <span className="text-[var(--text-secondary)]">{t('tool.result')}: </span>
               <pre className="text-[var(--text-primary)] bg-[var(--bg-primary)] px-2 py-1 rounded mt-0.5 max-h-24 overflow-y-auto whitespace-pre-wrap">
                 {event.result.slice(0, 500)}
               </pre>
@@ -58,15 +60,6 @@ function ToolEventCard({ event }: { event: ToolEvent }) {
     </div>
   )
 }
-
-const SUGGESTIONS = [
-  'Plan a weekend trip',
-  'Draft a professional email',
-  'Summarize a long document',
-  'Research a topic for me',
-  'Help me understand something',
-  'Brainstorm creative ideas'
-]
 
 const markdownComponents = {
   code({ className, children, ...props }: { className?: string; children?: React.ReactNode }) {
@@ -110,22 +103,47 @@ const markdownComponents = {
   }
 }
 
+function useTheme(): { theme: string; toggleTheme: () => void } {
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('agent0_theme') || 'dark'
+    document.documentElement.dataset.theme = saved
+    return saved
+  })
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => {
+      const next = prev === 'dark' ? 'light' : 'dark'
+      localStorage.setItem('agent0_theme', next)
+      document.documentElement.dataset.theme = next
+      return next
+    })
+  }, [])
+
+  return { theme, toggleTheme }
+}
+
 function App() {
-  const { messages, isLoading, error, toolEvents, sendMessage, stopGeneration, clearMessages } = useChat()
+  const { t } = useLanguage()
+  const { theme, toggleTheme } = useTheme()
+  const { messages, isLoading, error, toolEvents, statusLines, sendMessage, stopGeneration, clearMessages } = useChat()
   const [input, setInput] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [providerLabel, setProviderLabel] = useState('Ollama')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  const hasMessages = messages.length > 1 // more than just welcome
+  const hasMessages = messages.length > 1
+
+  const SUGGESTIONS = [
+    t('suggest.trip'),
+    t('suggest.email'),
+    t('suggest.summarize'),
+    t('suggest.research'),
+    t('suggest.explain'),
+    t('suggest.brainstorm')
+  ]
 
   useEffect(() => {
-    initProviders().then(() => {
-      const cfg = getAgentConfig()
-      const p = getProvider(cfg.provider)
-      setProviderLabel(p?.name || 'Ollama')
-    })
+    initProviders()
   }, [])
 
   useEffect(() => {
@@ -133,11 +151,7 @@ function App() {
   }, [messages])
 
   const recheckProviders = useCallback(() => {
-    initProviders().then(() => {
-      const cfg = getAgentConfig()
-      const p = getProvider(cfg.provider)
-      setProviderLabel(p?.name || 'Ollama')
-    })
+    initProviders()
   }, [])
 
   const handleSend = useCallback(async (text?: string) => {
@@ -154,18 +168,39 @@ function App() {
           <div className="w-8 h-8 rounded-xl bg-[var(--accent)] flex items-center justify-center text-sm font-bold">
             A0
           </div>
-          <span className="font-semibold text-[15px] tracking-tight">Agent0</span>
+          <span className="font-semibold text-[15px] tracking-tight">{t('app.title')}</span>
         </div>
-        <button
-          onClick={() => setSettingsOpen(true)}
-          className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-          title="Settings"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            )}
+          </button>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            title={t('app.settings')}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-6">
@@ -186,12 +221,21 @@ function App() {
                   {msg.role === 'user' ? (
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                   ) : (
-                    <div className="prose prose-invert prose-sm max-w-none">
+                    <div>
+                      <div className="text-[10px] text-[var(--text-secondary)] mb-1 opacity-50">
+                        {(() => {
+                          const cfg = getAgentConfig()
+                          const p = getProvider(cfg.provider)
+                          const m = p?.models.find(m => m.id === cfg.model)
+                          return m?.name || cfg.model
+                        })()}
+                      </div>
+                      <div className="prose prose-invert prose-sm max-w-none">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={markdownComponents}
                       >
-                        {msg.content || (msg.isStreaming ? '' : '_Thinking..._')}
+                        {msg.content || (msg.isStreaming ? '' : `_${t('app.thinking')}_`)}
                       </ReactMarkdown>
                       {msg.isStreaming && !msg.content && (
                         <div className="flex gap-1.5 py-1">
@@ -201,10 +245,21 @@ function App() {
                         </div>
                       )}
                     </div>
+                    </div>
                   )}
                 </div>
               </div>
             ))}
+            {statusLines.length > 0 && (
+              <div className="flex flex-col items-center gap-0.5">
+                {statusLines.map((line, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-[10px] text-[var(--text-secondary)] opacity-60">
+                    <div className="w-1 h-1 rounded-full bg-[var(--text-secondary)]" />
+                    <span>{line}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {toolEvents.length > 0 && (
               <div className="flex justify-start">
                 <div className="max-w-[80%] space-y-2">
@@ -231,10 +286,10 @@ function App() {
               </svg>
             </div>
             <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-1.5">
-              What can I help you with?
+              {t('app.hero.title')}
             </h1>
             <p className="text-sm text-[var(--text-secondary)] mb-8 max-w-md text-center leading-relaxed">
-              I can write, research, summarize, brainstorm, and more — using the best AI model for each task.
+              {t('app.hero.desc')}
             </p>
             <div className="flex flex-wrap gap-2 justify-center max-w-lg">
               {SUGGESTIONS.map(s => (
@@ -268,7 +323,7 @@ function App() {
                     handleSend()
                   }
                 }}
-                placeholder="Type a message..."
+                placeholder={t('app.placeholder')}
                 rows={1}
                 className="w-full resize-none rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-secondary)] outline-none focus:border-[var(--accent)]/50 transition-colors"
                 style={{ minHeight: '48px', maxHeight: '200px' }}
@@ -312,18 +367,23 @@ function App() {
                 onClick={() => setSettingsOpen(true)}
                 className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
-                {providerLabel}
+                {(() => {
+                  const cfg = getAgentConfig()
+                  const p = getProvider(cfg.provider)
+                  const m = p?.models.find(m => m.id === cfg.model)
+                  return `${p?.name || cfg.provider} / ${m?.name || cfg.model}`
+                })()}
               </button>
               <span className="text-[var(--border)]">·</span>
               <button
                 onClick={clearMessages}
                 className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
-                New chat
+                {t('app.newChat')}
               </button>
               <span className="text-[var(--border)]">·</span>
               <span className="text-[11px] text-[var(--text-secondary)]">
-                {messages.length - 1} messages
+                {messages.length - 1} {t('app.messages')}
               </span>
             </div>
           </div>

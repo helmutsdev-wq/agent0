@@ -15,6 +15,9 @@ const api = {
   dir: {
     list: (dirPath: string) => ipcRenderer.invoke('dir:list', dirPath)
   },
+  web: {
+    fetch: (url: string) => ipcRenderer.invoke('web:fetch', url)
+  },
   ollama: {
     checkInstalled: () => ipcRenderer.invoke('ollama:check-installed'),
     downloadInstaller: () => ipcRenderer.invoke('ollama:download-installer'),

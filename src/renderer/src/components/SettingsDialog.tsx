@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
 import { Input, Label } from './ui/input'
 import { Badge } from './ui/badge'
 import { LocalModelSetup } from './LocalModelSetup'
+import { useLanguage, Lang } from '../lib/i18n'
 
 const PROVIDER_NAMES: Record<string, { label: string; color: string; docsUrl: string }> = {
   ollama: {
@@ -39,6 +40,7 @@ export function SettingsDialog({
   onOpenChange: (open: boolean) => void
   onRecheckProviders: () => void
 }) {
+  const { t, lang, setLang } = useLanguage()
   const [, forceUpdate] = React.useState(0)
   const [activeTab, setActiveTab] = React.useState('models')
   const [localApiKeys, setLocalApiKeys] = React.useState<Record<string, string>>(() => ({
@@ -46,6 +48,7 @@ export function SettingsDialog({
     groq: localStorage.getItem('groq_api_key') || '',
     huggingface: localStorage.getItem('huggingface_api_key') || ''
   }))
+  const [visibleKeys, setVisibleKeys] = React.useState<Record<string, boolean>>({})
 
   function saveApiKey(provider: string, key: string) {
     localStorage.setItem(`${provider}_api_key`, key)
@@ -65,25 +68,30 @@ export function SettingsDialog({
     forceUpdate(n => n + 1)
   }
 
+  const LANGUAGES: { value: Lang; label: string }[] = [
+    { value: 'en', label: 'English' },
+    { value: 'lv', label: 'Latviešu' }
+  ]
+
   return (
-    <SlideOver open={open} onOpenChange={onOpenChange} title="Settings">
+    <SlideOver open={open} onOpenChange={onOpenChange} title={t('settings.title')}>
       <p className="text-xs text-[var(--text-secondary)] mb-4">
-        Configure AI providers, models, and API keys
+        {t('settings.desc')}
       </p>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full">
           <TabsTrigger value="models" activeValue={activeTab} onClick={() => setActiveTab('models')}>
-            Models
+            {t('settings.tab.models')}
           </TabsTrigger>
           <TabsTrigger value="keys" activeValue={activeTab} onClick={() => setActiveTab('keys')}>
-            API Keys
+            {t('settings.tab.keys')}
           </TabsTrigger>
           <TabsTrigger value="local" activeValue={activeTab} onClick={() => setActiveTab('local')}>
-            Local Setup
+            {t('settings.tab.local')}
           </TabsTrigger>
           <TabsTrigger value="about" activeValue={activeTab} onClick={() => setActiveTab('about')}>
-            About
+            {t('settings.tab.about')}
           </TabsTrigger>
         </TabsList>
 
@@ -94,7 +102,7 @@ export function SettingsDialog({
             return (
               <div className="space-y-4">
                 <div>
-                  <Label>Active Provider</Label>
+                  <Label>{t('settings.activeProvider')}</Label>
                   <select
                     value={agentConfig.provider}
                     onChange={e => handleProviderChange(e.target.value)}
@@ -109,7 +117,7 @@ export function SettingsDialog({
                 </div>
 
                 <div>
-                  <Label>Active Model</Label>
+                  <Label>{t('settings.activeModel')}</Label>
                   <select
                     value={agentConfig.model}
                     onChange={e => {
@@ -122,7 +130,7 @@ export function SettingsDialog({
                       .find(c => c.id === agentConfig.provider)
                       ?.models.map(m => (
                         <option key={m.id} value={m.id} disabled={!m.available}>
-                          {m.name} {!m.available ? '(unavailable)' : ''}
+                          {m.name} {!m.available ? t('settings.unavailable') : ''}
                         </option>
                       ))}
                   </select>
@@ -130,9 +138,9 @@ export function SettingsDialog({
 
                 <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
                   <div>
-                    <Label className="cursor-pointer">Smart Routing</Label>
+                    <Label className="cursor-pointer">{t('settings.smartRouting')}</Label>
                     <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                      Auto-select best model for each task
+                      {t('settings.smartRoutingDesc')}
                     </p>
                   </div>
                   <button
@@ -153,8 +161,26 @@ export function SettingsDialog({
                   </button>
                 </div>
 
+                <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
+                  <div>
+                    <Label className="cursor-pointer">{t('settings.tab.keys')}</Label>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                      {LANGUAGES.find(l => l.value === lang)?.label}
+                    </p>
+                  </div>
+                  <select
+                    value={lang}
+                    onChange={e => setLang(e.target.value as Lang)}
+                    className="appearance-none rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] px-2 py-1 text-xs text-[var(--text-primary)] outline-none"
+                  >
+                    {LANGUAGES.map(l => (
+                      <option key={l.value} value={l.value}>{l.label}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="pt-2">
-                  <Label>Available Providers</Label>
+                  <Label>{t('settings.availableProviders')}</Label>
                   <div className="mt-2 space-y-2">
                     {configs.map(c => {
                       const modelsAvailable = c.models.filter(m => m.available).length
@@ -171,13 +197,13 @@ export function SettingsDialog({
                               c.id === 'ollama' ? 'error' :
                               !c.hasApiKey ? 'warning' : 'error'
                             }>
-                              {modelsAvailable > 0 ? 'Ready' :
-                               c.id === 'ollama' ? 'Disconnected' :
-                               !c.hasApiKey ? 'No Key' : 'Error'}
+                              {modelsAvailable > 0 ? t('settings.ready') :
+                               c.id === 'ollama' ? t('settings.disconnected') :
+                               !c.hasApiKey ? t('settings.noKey') : t('settings.error')}
                             </Badge>
                           </div>
                           <span className="text-xs text-[var(--text-secondary)]">
-                            {modelsAvailable} models
+                            {modelsAvailable} {t('settings.modelsCount')}
                           </span>
                         </div>
                       )
@@ -200,17 +226,47 @@ export function SettingsDialog({
                   rel="noopener noreferrer"
                   className="text-xs text-[var(--accent)] hover:underline"
                 >
-                  Get key
+                  {t('settings.getKey')}
                 </a>
               </div>
-              <Input
-                type="password"
-                placeholder="Paste your Gemini API key..."
-                value={localApiKeys.gemini}
-                onChange={e => saveApiKey('gemini', e.target.value)}
-              />
+              <div className="flex items-center gap-1">
+                <Input
+                  type={visibleKeys['gemini'] ? 'text' : 'password'}
+                  placeholder={t('settings.geminiPlaceholder')}
+                  value={localApiKeys.gemini}
+                  onChange={e => saveApiKey('gemini', e.target.value)}
+                  className="flex-1"
+                />
+                <button
+                  onClick={() => setVisibleKeys(prev => ({ ...prev, gemini: !prev['gemini'] }))}
+                  className="shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  title={visibleKeys['gemini'] ? 'Hide' : 'Show'}
+                >
+                  {visibleKeys['gemini'] ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(localApiKeys.gemini) }}
+                  className="shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  title="Copy"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </button>
+              </div>
               <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                Free tier: 60 requests per minute
+                {t('settings.geminiRate')}
               </p>
             </div>
 
@@ -223,40 +279,100 @@ export function SettingsDialog({
                   rel="noopener noreferrer"
                   className="text-xs text-[var(--accent)] hover:underline"
                 >
-                  Get key
+                  {t('settings.getKey')}
                 </a>
               </div>
-              <Input
-                type="password"
-                placeholder="Paste your Groq API key..."
-                value={localApiKeys.groq}
-                onChange={e => saveApiKey('groq', e.target.value)}
-              />
+              <div className="flex items-center gap-1">
+                <Input
+                  type={visibleKeys['groq'] ? 'text' : 'password'}
+                  placeholder={t('settings.groqPlaceholder')}
+                  value={localApiKeys.groq}
+                  onChange={e => saveApiKey('groq', e.target.value)}
+                  className="flex-1"
+                />
+                <button
+                  onClick={() => setVisibleKeys(prev => ({ ...prev, groq: !prev['groq'] }))}
+                  className="shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  title={visibleKeys['groq'] ? 'Hide' : 'Show'}
+                >
+                  {visibleKeys['groq'] ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(localApiKeys.groq) }}
+                  className="shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  title="Copy"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </button>
+              </div>
               <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                Free tier: rate limited, generous free credits
+                {t('settings.groqRate')}
               </p>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <Label>Hugging Face Token</Label>
+                <Label>{t('provider.huggingface')} Token</Label>
                 <a
                   href="https://huggingface.co/settings/tokens"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-[var(--accent)] hover:underline"
                 >
-                  Get token
+                  {t('settings.getToken')}
                 </a>
               </div>
-              <Input
-                type="password"
-                placeholder="Paste your Hugging Face token..."
-                value={localApiKeys.huggingface}
-                onChange={e => saveApiKey('huggingface', e.target.value)}
-              />
+              <div className="flex items-center gap-1">
+                <Input
+                  type={visibleKeys['huggingface'] ? 'text' : 'password'}
+                  placeholder={t('settings.hfPlaceholder')}
+                  value={localApiKeys.huggingface}
+                  onChange={e => saveApiKey('huggingface', e.target.value)}
+                  className="flex-1"
+                />
+                <button
+                  onClick={() => setVisibleKeys(prev => ({ ...prev, huggingface: !prev['huggingface'] }))}
+                  className="shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  title={visibleKeys['huggingface'] ? 'Hide' : 'Show'}
+                >
+                  {visibleKeys['huggingface'] ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(localApiKeys.huggingface) }}
+                  className="shrink-0 p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                  title="Copy"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </button>
+              </div>
               <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                Free inference API, no credit card needed
+                {t('settings.hfRate')}
               </p>
             </div>
           </div>
@@ -269,25 +385,20 @@ export function SettingsDialog({
         <TabsContent value="about" activeValue={activeTab}>
           <div className="space-y-3 text-sm text-[var(--text-secondary)]">
             <p>
-              <strong className="text-[var(--text-primary)]">Agent0</strong> v0.1.0
+              <strong className="text-[var(--text-primary)]">{t('settings.about.version')}</strong>
             </p>
-            <p>
-              An AI agent desktop app that routes tasks to the best model across
-              multiple providers.
-            </p>
-            <p>Free providers: Ollama (local), Gemini (Google), Groq, Hugging Face</p>
+            <p>{t('settings.about.desc')}</p>
+            <p>{t('settings.about.providers')}</p>
             <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] space-y-1.5">
-              <p className="text-xs font-medium text-[var(--text-primary)]">Troubleshooting API Keys</p>
+              <p className="text-xs font-medium text-[var(--text-primary)]">{t('settings.about.troubleshooting')}</p>
               <p className="text-xs">
-                <strong>Gemini:</strong> If https://aistudio.google.com/apikey gives an error, try creating the key from Google Cloud Console instead:
+                <strong>Gemini:</strong> {t('settings.about.geminiHelp')}
                 <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] ml-1 hover:underline">
                   cloud.google.com/apis/credentials
                 </a>
               </p>
             </div>
-            <p className="text-xs mt-2">
-              Your API keys are stored locally and never sent anywhere except to the provider's API.
-            </p>
+            <p className="text-xs mt-2">{t('settings.about.privacy')}</p>
           </div>
         </TabsContent>
       </Tabs>

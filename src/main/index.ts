@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent, Menu } from 'electron'
 import { join, resolve, normalize } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdtempSync } from 'fs'
 import { execSync, spawn, execFile } from 'child_process'
@@ -50,6 +50,17 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: false
     }
+  })
+
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const menu = Menu.buildFromTemplate([
+      { label: 'Cut', role: 'cut', enabled: params.editFlags.canCut },
+      { label: 'Copy', role: 'copy', enabled: params.editFlags.canCopy },
+      { label: 'Paste', role: 'paste', enabled: params.editFlags.canPaste },
+      { type: 'separator' },
+      { label: 'Select All', role: 'selectAll' }
+    ])
+    menu.popup()
   })
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -131,6 +142,32 @@ ipcMain.handle('dir:list', (_event, dirPath: string) => {
   } catch (e) {
     return { error: (e as Error).message }
   }
+})
+
+// ─── Web Fetch IPC ──────────────────────────────────────────────────────
+
+ipcMain.handle('web:fetch', (_event, url: string) => {
+  return new Promise((resolve) => {
+    const protocol = url.startsWith('https') ? https : http
+    const req = protocol.get(url, { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        resolve({ error: `Redirected to ${res.headers.location}. Try that URL directly.` })
+        return
+      }
+      let data = ''
+      res.on('data', (chunk: string) => { data += chunk })
+      res.on('end', () => {
+        resolve({ content: data.slice(0, 50000), status: res.statusCode })
+      })
+    })
+    req.on('error', (err) => {
+      resolve({ error: `Cannot fetch ${url}: ${err.message}` })
+    })
+    req.on('timeout', () => {
+      req.destroy()
+      resolve({ error: `Request to ${url} timed out after 15s` })
+    })
+  })
 })
 
 function sendProgress(event: IpcMainInvokeEvent, data: { stage: string; percent: number; message: string }) {

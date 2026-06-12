@@ -114,9 +114,9 @@ async function listFiles(dirPath: string): Promise<ToolResult> {
 
 async function webFetch(url: string): Promise<ToolResult> {
   try {
-    const res = await fetch(url)
-    const text = await res.text()
-    return { success: true, output: text.slice(0, 10000) }
+    const result = await window.electronAPI.web.fetch(url)
+    if (result.error) return { success: false, output: '', error: result.error }
+    return { success: true, output: result.content?.slice(0, 10000) || '' }
   } catch (e) {
     return { success: false, output: '', error: (e as Error).message }
   }
