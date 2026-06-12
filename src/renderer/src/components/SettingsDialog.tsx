@@ -109,6 +109,31 @@ export function SettingsDialog({
             const configs = getConfigs()
             return (
               <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
+                  <div>
+                    <Label className="cursor-pointer">{t('settings.smartRouting')}</Label>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                      {t('settings.smartRoutingDesc')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const cfg = getAgentConfig()
+                      setAgentConfig({ useRouter: !cfg.useRouter })
+                      forceUpdate(n => n + 1)
+                    }}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      agentConfig.useRouter ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                        agentConfig.useRouter ? 'translate-x-5' : ''
+                      }`}
+                    />
+                  </button>
+                </div>
+
                 {!agentConfig.useRouter && (
                   <>
                     <div>
@@ -150,32 +175,7 @@ export function SettingsDialog({
 
                 <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
                   <div>
-                    <Label className="cursor-pointer">{t('settings.smartRouting')}</Label>
-                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                      {t('settings.smartRoutingDesc')}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const cfg = getAgentConfig()
-                      setAgentConfig({ useRouter: !cfg.useRouter })
-                      forceUpdate(n => n + 1)
-                    }}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${
-                      agentConfig.useRouter ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        agentConfig.useRouter ? 'translate-x-5' : ''
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
-                  <div>
-                    <Label className="cursor-pointer">{t('settings.tab.keys')}</Label>
+                    <Label className="cursor-pointer">{t('settings.language')}</Label>
                     <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                       {LANGUAGES.find(l => l.value === lang)?.label}
                     </p>
