@@ -2,11 +2,13 @@ import { AIProvider, ModelConfig, ProviderConfig } from './types'
 import { OllamaProvider } from './ollama'
 import { GeminiProvider } from './gemini'
 import { GroqProvider } from './groq'
+import { HuggingFaceProvider } from './huggingface'
 
 const providers: AIProvider[] = [
   new OllamaProvider(),
   new GeminiProvider(),
-  new GroqProvider()
+  new GroqProvider(),
+  new HuggingFaceProvider()
 ]
 
 let initialized = false

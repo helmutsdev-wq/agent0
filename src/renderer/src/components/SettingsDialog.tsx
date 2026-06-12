@@ -21,6 +21,11 @@ const PROVIDER_NAMES: Record<string, { label: string; color: string; docsUrl: st
     label: 'Free API Key',
     color: 'warning',
     docsUrl: 'https://console.groq.com/keys'
+  },
+  huggingface: {
+    label: 'Free Token',
+    color: 'warning',
+    docsUrl: 'https://huggingface.co/settings/tokens'
   }
 }
 
@@ -37,7 +42,8 @@ export function SettingsDialog({
   const [activeTab, setActiveTab] = React.useState('models')
   const [localApiKeys, setLocalApiKeys] = React.useState<Record<string, string>>(() => ({
     gemini: localStorage.getItem('gemini_api_key') || '',
-    groq: localStorage.getItem('groq_api_key') || ''
+    groq: localStorage.getItem('groq_api_key') || '',
+    huggingface: localStorage.getItem('huggingface_api_key') || ''
   }))
 
   function saveApiKey(provider: string, key: string) {
@@ -229,6 +235,29 @@ export function SettingsDialog({
                 Free tier: rate limited, generous free credits
               </p>
             </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Label>Hugging Face Token</Label>
+                <a
+                  href="https://huggingface.co/settings/tokens"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-[var(--accent)] hover:underline"
+                >
+                  Get token
+                </a>
+              </div>
+              <Input
+                type="password"
+                placeholder="Paste your Hugging Face token..."
+                value={localApiKeys.huggingface}
+                onChange={e => saveApiKey('huggingface', e.target.value)}
+              />
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                Free inference API, no credit card needed
+              </p>
+            </div>
           </div>
         </TabsContent>
 
@@ -241,10 +270,18 @@ export function SettingsDialog({
               An AI agent desktop app that routes tasks to the best model across
               multiple providers.
             </p>
-            <p>Free providers included: Ollama (local), Gemini (Google), Groq</p>
-            <p className="text-xs mt-4">
-              Your API keys are stored locally and never sent anywhere except to
-              the provider's API.
+            <p>Free providers: Ollama (local), Gemini (Google), Groq, Hugging Face</p>
+            <div className="mt-3 p-3 rounded-lg bg-[var(--bg-tertiary)] space-y-1.5">
+              <p className="text-xs font-medium text-[var(--text-primary)]">Troubleshooting API Keys</p>
+              <p className="text-xs">
+                <strong>Gemini:</strong> If https://aistudio.google.com/apikey gives an error, try creating the key from Google Cloud Console instead:
+                <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] ml-1 hover:underline">
+                  cloud.google.com/apis/credentials
+                </a>
+              </p>
+            </div>
+            <p className="text-xs mt-2">
+              Your API keys are stored locally and never sent anywhere except to the provider's API.
             </p>
           </div>
         </TabsContent>
