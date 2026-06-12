@@ -17,38 +17,36 @@ export class HuggingFaceProvider extends AIProvider {
       cost: 'free'
     },
     {
-      id: 'HuggingFaceH4/zephyr-7b-beta',
-      name: 'Zephyr 7B Beta',
-      provider: 'huggingface',
-      capabilities: ['chat'],
-      speed: 'fast',
-      quality: 'medium',
-      available: true,
-      cost: 'free'
-    },
-    {
-      id: 'meta-llama/Llama-3.2-3B-Instruct',
-      name: 'Llama 3.2 3B',
+      id: 'Qwen/Qwen2.5-7B-Instruct',
+      name: 'Qwen 2.5 7B',
       provider: 'huggingface',
       capabilities: ['chat', 'code'],
-      speed: 'fast',
+      speed: 'medium',
       quality: 'medium',
       available: true,
       cost: 'free'
     },
     {
-      id: 'microsoft/Phi-3-mini-4k-instruct',
-      name: 'Phi-3 Mini',
+      id: 'microsoft/Phi-3.5-mini-instruct',
+      name: 'Phi-3.5 Mini',
       provider: 'huggingface',
       capabilities: ['chat', 'code', 'reasoning'],
       speed: 'fast',
       quality: 'medium',
       available: true,
       cost: 'free'
+    },
+    {
+      id: 'google/gemma-2-2b-it',
+      name: 'Gemma 2 2B',
+      provider: 'huggingface',
+      capabilities: ['chat'],
+      speed: 'fast',
+      quality: 'low',
+      available: true,
+      cost: 'free'
     }
   ]
-
-  hasApiKey = false
 
   async checkAvailability(): Promise<boolean> {
     const apiKey = localStorage.getItem('huggingface_api_key')

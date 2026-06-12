@@ -7,22 +7,22 @@ export class GroqProvider extends AIProvider {
 
   models: ModelConfig[] = [
     {
-      id: 'llama3-8b-8192',
-      name: 'Llama 3 8B',
-      provider: 'groq',
-      capabilities: ['chat', 'code'],
-      speed: 'fast',
-      quality: 'medium',
-      available: true,
-      cost: 'free'
-    },
-    {
-      id: 'llama3-70b-8192',
-      name: 'Llama 3 70B',
+      id: 'llama-3.3-70b-versatile',
+      name: 'Llama 3.3 70B',
       provider: 'groq',
       capabilities: ['chat', 'code', 'reasoning'],
       speed: 'fast',
       quality: 'high',
+      available: true,
+      cost: 'free'
+    },
+    {
+      id: 'llama-3.1-8b-instant',
+      name: 'Llama 3.1 8B',
+      provider: 'groq',
+      capabilities: ['chat', 'code'],
+      speed: 'fast',
+      quality: 'medium',
       available: true,
       cost: 'free'
     },
@@ -37,8 +37,18 @@ export class GroqProvider extends AIProvider {
       cost: 'free'
     },
     {
-      id: 'llama-3.3-70b-versatile',
-      name: 'Llama 3.3 70B',
+      id: 'deepseek-r1-distill-llama-70b',
+      name: 'DeepSeek R1 70B',
+      provider: 'groq',
+      capabilities: ['code', 'reasoning'],
+      speed: 'fast',
+      quality: 'high',
+      available: true,
+      cost: 'free'
+    },
+    {
+      id: 'qwen-2.5-32b',
+      name: 'Qwen 2.5 32B',
       provider: 'groq',
       capabilities: ['chat', 'code', 'reasoning'],
       speed: 'fast',
@@ -47,8 +57,6 @@ export class GroqProvider extends AIProvider {
       cost: 'free'
     }
   ]
-
-  hasApiKey = false
 
   async checkAvailability(): Promise<boolean> {
     const apiKey = localStorage.getItem('groq_api_key')
@@ -103,6 +111,7 @@ export class GroqProvider extends AIProvider {
 
       const decoder = new TextDecoder()
       let buffer = ''
+      let sawDone = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -117,6 +126,7 @@ export class GroqProvider extends AIProvider {
           if (!trimmed || !trimmed.startsWith('data: ')) continue
           const jsonStr = trimmed.slice(6)
           if (jsonStr === '[DONE]') {
+            sawDone = true
             onChunk({ type: 'done', content: '' })
             continue
           }
@@ -132,7 +142,9 @@ export class GroqProvider extends AIProvider {
         }
       }
 
-      onChunk({ type: 'done', content: '' })
+      if (!sawDone) {
+        onChunk({ type: 'done', content: '' })
+      }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         onChunk({ type: 'error', content: `Groq error: ${(err as Error).message}` })

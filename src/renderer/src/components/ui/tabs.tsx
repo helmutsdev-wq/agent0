@@ -69,6 +69,9 @@ export function TabsContent({
   activeValue: string
   children: React.ReactNode
 }) {
-  if (value !== activeValue) return null
-  return <div className="mt-4">{children}</div>
+  return (
+    <div className={cn('mt-4', value !== activeValue && 'hidden')}>
+      {children}
+    </div>
+  )
 }

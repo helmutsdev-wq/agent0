@@ -11,15 +11,21 @@ export interface AgentConfig {
 }
 
 const DEFAULT_SYSTEM_PROMPT = `You are Agent0, an AI assistant with access to tools.
-You can:
-- Read and write files on the local filesystem
-- Execute bash commands
-- Fetch URLs from the web
+You are running on a Windows system. Commands must use Windows shell syntax (cmd or PowerShell).
 
-When you need to use a tool, respond with a tool call in the format:
+Available tools:
+- read_file   {"path": "/absolute/or/relative/path"}
+- write_file  {"path": "/absolute/or/relative/path", "content": "file contents"}
+- edit_file   {"path": "/absolute/or/relative/path", "oldString": "text to find", "newString": "replacement"}
+- list_files  {"path": "/absolute/or/relative/directory"}
+- bash        {"command": "shell command"}
+- web_fetch   {"url": "https://..."}
+
+CRITICAL: When you need to use a tool, output ONLY the tool call line and NOTHING ELSE. Do not explain what you're doing. Do not say you're waiting. Just output:
+
 TOOL_CALL: {"name": "tool_name", "input": {...}}
-TOOL_RESULT: ...
 
+After receiving the tool result, respond directly with the answer. NEVER mention or thank for tool results — just use the data silently.
 Always be helpful, concise, and honest about your capabilities.`
 
 let currentConfig: AgentConfig = {
@@ -39,28 +45,83 @@ export function getAgentConfig(): AgentConfig {
 
 function extractToolCalls(content: string): ToolCall[] {
   const calls: ToolCall[] = []
-  const regex = /TOOL_CALL:\s*(\{[\s\S]*?\})\s*\n([\s\S]*?)(?=TOOL_CALL:|TOOL_RESULT:|$)/g
-  let match
-  while ((match = regex.exec(content)) !== null) {
+
+  const marker = 'TOOL_CALL:'
+  let searchFrom = 0
+  while (true) {
+    const markerIdx = content.indexOf(marker, searchFrom)
+    if (markerIdx === -1) break
+
+    const jsonStart = content.indexOf('{', markerIdx + marker.length)
+    if (jsonStart === -1) {
+      searchFrom = markerIdx + marker.length
+      continue
+    }
+
+    let depth = 0
+    let inString = false
+    let escape = false
+    let jsonEnd = -1
+    for (let i = jsonStart; i < content.length; i++) {
+      const ch = content[i]
+      if (escape) {
+        escape = false
+        continue
+      }
+      if (ch === '\\' && inString) {
+        escape = true
+        continue
+      }
+      if (ch === '"') {
+        inString = !inString
+        continue
+      }
+      if (inString) continue
+      if (ch === '{') depth++
+      if (ch === '}') {
+        depth--
+        if (depth === 0) {
+          jsonEnd = i
+          break
+        }
+      }
+    }
+
+    if (jsonEnd === -1) {
+      searchFrom = jsonStart + 1
+      continue
+    }
+
+    const jsonStr = content.slice(jsonStart, jsonEnd + 1)
+    searchFrom = jsonEnd + 1
+
     try {
-      const input = JSON.parse(match[1])
-      const name = match[2].trim().split('\n')[0].trim()
-      calls.push({ name, input })
+      const parsed = JSON.parse(jsonStr)
+      const name = parsed.name as string
+      const input = parsed.input as Record<string, unknown> || parsed.arguments || {}
+      if (name) {
+        calls.push({ name, input })
+      }
     } catch {
       // skip
     }
   }
 
   const jsonRegex = /```json\n([\s\S]*?)```/g
+  let match
   while ((match = jsonRegex.exec(content)) !== null) {
     try {
       const json = JSON.parse(match[1])
       if (json.tool_calls) {
         for (const tc of json.tool_calls) {
-          calls.push({
-            name: tc.function?.name || tc.name,
-            input: tc.function?.arguments || tc.input || {}
-          })
+          const name = tc.function?.name || tc.name
+          let input = tc.function?.arguments || tc.input || {}
+          if (typeof input === 'string') {
+            try { input = JSON.parse(input) } catch { /* keep as string */ }
+          }
+          if (name) {
+            calls.push({ name, input })
+          }
         }
       }
     } catch {
@@ -179,7 +240,7 @@ export async function runAgent(
         allMessages.push({ role: 'assistant', content: accumulatedContent })
         allMessages.push({
           role: 'system',
-          content: `Tool "${toolCall.name}" result:\n${result.output || result.error || '(empty)'}`
+          content: `${result.output || result.error || '(empty)'}`
         })
       }
     }

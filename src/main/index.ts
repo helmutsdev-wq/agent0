@@ -1,10 +1,39 @@
-import { app, BrowserWindow, ipcMain, IpcMainEvent } from 'electron'
-import { join } from 'path'
+import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent } from 'electron'
+import { join, resolve, normalize } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdtempSync } from 'fs'
 import { execSync, spawn, execFile } from 'child_process'
 import https from 'https'
 import http from 'http'
 import { tmpdir } from 'os'
+
+const BLOCKED_DIRS = [
+  '/sys', '/proc', '/dev',
+  'C:\\Windows', 'C:\\Windows\\System32', 'C:\\Windows\\SysWOW64',
+  'C:\\ProgramData', '/etc', '/boot', '/root'
+]
+
+const DANGEROUS_COMMANDS = [
+  /rm\s+-rf\s+\//, /dd\s+if=/, />\s*\/dev\/sd/,
+  /format\s+[c-z]:/, /del\s+\/f\s+\/s\s+C:\\/i,
+  /rd\s+\/s\s+C:\\/i, /format\s+C:/i
+]
+
+function isPathSafe(filePath: string): boolean {
+  const resolved = resolve(normalize(filePath))
+  for (const blocked of BLOCKED_DIRS) {
+    if (normalize(resolved).toLowerCase().startsWith(normalize(blocked).toLowerCase())) {
+      return false
+    }
+  }
+  return true
+}
+
+function isCommandSafe(command: string): boolean {
+  for (const pattern of DANGEROUS_COMMANDS) {
+    if (pattern.test(command)) return false
+  }
+  return true
+}
 
 let mainWindow: BrowserWindow | null = null
 
@@ -44,6 +73,7 @@ app.on('activate', () => {
 
 ipcMain.handle('file:read', (_event, filePath: string) => {
   try {
+    if (!isPathSafe(filePath)) return { error: 'Access denied: path restricted' }
     return { content: readFileSync(filePath, 'utf-8') }
   } catch (e) {
     return { error: (e as Error).message }
@@ -52,6 +82,7 @@ ipcMain.handle('file:read', (_event, filePath: string) => {
 
 ipcMain.handle('file:write', (_event, filePath: string, content: string) => {
   try {
+    if (!isPathSafe(filePath)) return { error: 'Access denied: path restricted' }
     writeFileSync(filePath, content, 'utf-8')
     return { success: true }
   } catch (e) {
@@ -60,11 +91,13 @@ ipcMain.handle('file:write', (_event, filePath: string, content: string) => {
 })
 
 ipcMain.handle('file:exists', (_event, filePath: string) => {
+  if (!isPathSafe(filePath)) return false
   return existsSync(filePath)
 })
 
 ipcMain.handle('bash:exec', (_event, command: string) => {
   try {
+    if (!isCommandSafe(command)) return { error: 'Blocked: dangerous command detected' }
     const output = execSync(command, {
       encoding: 'utf-8',
       timeout: 30000,
@@ -82,9 +115,10 @@ ipcMain.handle('bash:exec', (_event, command: string) => {
 
 ipcMain.handle('dir:list', (_event, dirPath: string) => {
   try {
+    if (!isPathSafe(dirPath)) return { error: 'Access denied: path restricted' }
     const { readdirSync, statSync } = require('fs')
     const entries = readdirSync(dirPath)
-    const items = entries.map(name => {
+    const items = entries.map((name: string) => {
       const fullPath = join(dirPath, name)
       try {
         const stat = statSync(fullPath)
@@ -99,7 +133,7 @@ ipcMain.handle('dir:list', (_event, dirPath: string) => {
   }
 })
 
-function sendProgress(event: IpcMainEvent, data: { stage: string; percent: number; message: string }) {
+function sendProgress(event: IpcMainInvokeEvent, data: { stage: string; percent: number; message: string }) {
   event.sender.send('ollama:progress', data)
 }
 
@@ -200,11 +234,19 @@ ipcMain.handle('ollama:download-installer', async (event) => {
 })
 
 ipcMain.handle('ollama:install-ollama', async (event, installerPath: string) => {
-  sendProgress(event, { stage: 'installing', percent: 50, message: 'Running installer...' })
+  sendProgress(event, { stage: 'installing', percent: 50, message: 'Installing Ollama (this may take 1-2 minutes)...' })
 
   return new Promise((resolve) => {
     if (process.platform === 'win32') {
+      const startTime = Date.now()
+      const progressTimer = setInterval(() => {
+        const elapsed = Date.now() - startTime
+        const pct = Math.min(50 + Math.round((elapsed / 120000) * 25), 74)
+        sendProgress(event, { stage: 'installing', percent: pct, message: `Installing Ollama... ${Math.round(elapsed / 1000)}s` })
+      }, 2000)
+
       const proc = execFile(installerPath, ['/S'], (err) => {
+        clearInterval(progressTimer)
         if (err) {
           sendProgress(event, { stage: 'error', percent: 0, message: `Install failed: ${err.message}` })
           resolve({ success: false, error: err.message })
@@ -214,7 +256,7 @@ ipcMain.handle('ollama:install-ollama', async (event, installerPath: string) => 
         }
       })
       proc.stdout?.on('data', (data) => {
-        sendProgress(event, { stage: 'installing', percent: 60, message: data.toString().trim() })
+        sendProgress(event, { stage: 'installing', percent: 65, message: data.toString().trim() })
       })
     } else {
       resolve({ success: false, error: 'Unsupported platform' })

@@ -7,10 +7,20 @@ export class GeminiProvider extends AIProvider {
 
   models: ModelConfig[] = [
     {
-      id: 'gemini-2.0-flash-exp',
+      id: 'gemini-2.5-flash',
+      name: 'Gemini 2.5 Flash',
+      provider: 'gemini',
+      capabilities: ['chat', 'code', 'reasoning'],
+      speed: 'fast',
+      quality: 'high',
+      available: true,
+      cost: 'free'
+    },
+    {
+      id: 'gemini-2.0-flash',
       name: 'Gemini 2.0 Flash',
       provider: 'gemini',
-      capabilities: ['chat', 'code', 'reasoning', 'multimodal'],
+      capabilities: ['chat', 'code', 'reasoning'],
       speed: 'fast',
       quality: 'high',
       available: true,
@@ -20,7 +30,7 @@ export class GeminiProvider extends AIProvider {
       id: 'gemini-1.5-flash',
       name: 'Gemini 1.5 Flash',
       provider: 'gemini',
-      capabilities: ['chat', 'multimodal'],
+      capabilities: ['chat'],
       speed: 'fast',
       quality: 'medium',
       available: true,
@@ -30,15 +40,13 @@ export class GeminiProvider extends AIProvider {
       id: 'gemini-1.5-pro',
       name: 'Gemini 1.5 Pro',
       provider: 'gemini',
-      capabilities: ['chat', 'code', 'reasoning', 'multimodal'],
+      capabilities: ['chat', 'code', 'reasoning'],
       speed: 'medium',
       quality: 'high',
       available: true,
       cost: 'free'
     }
   ]
-
-  hasApiKey = false
 
   async checkAvailability(): Promise<boolean> {
     const apiKey = localStorage.getItem('gemini_api_key')
@@ -100,6 +108,7 @@ export class GeminiProvider extends AIProvider {
 
       const decoder = new TextDecoder()
       let buffer = ''
+      let sawDone = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -114,6 +123,7 @@ export class GeminiProvider extends AIProvider {
           if (!trimmed || !trimmed.startsWith('data: ')) continue
           const jsonStr = trimmed.slice(6)
           if (jsonStr === '[DONE]') {
+            sawDone = true
             onChunk({ type: 'done', content: '' })
             continue
           }
@@ -129,7 +139,9 @@ export class GeminiProvider extends AIProvider {
         }
       }
 
-      onChunk({ type: 'done', content: '' })
+      if (!sawDone) {
+        onChunk({ type: 'done', content: '' })
+      }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         onChunk({ type: 'error', content: `Gemini error: ${(err as Error).message}` })

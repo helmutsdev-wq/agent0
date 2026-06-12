@@ -17,6 +17,17 @@ const MODELS = [
   { id: 'qwen2.5:7b', name: 'Qwen 2.5 7B', size: '4.3 GB' }
 ]
 
+const TOTAL_STEPS = 3
+
+function getStepInfo(status: string): { step: number; label: string } {
+  switch (status) {
+    case 'downloading': return { step: 1, label: 'Downloading Ollama installer' }
+    case 'installing': return { step: 2, label: 'Installing Ollama' }
+    case 'pulling': return { step: 3, label: 'Downloading AI model' }
+    default: return { step: 0, label: '' }
+  }
+}
+
 export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
   const [state, setState] = React.useState<SetupState>({
     status: 'checking',
@@ -80,7 +91,7 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
   }, [onComplete])
 
   async function startSetup() {
-    setState(prev => ({ ...prev, status: 'downloading', progress: 0, message: 'Starting...' }))
+    setState(prev => ({ ...prev, status: 'downloading', progress: 0, message: 'Starting download...' }))
 
     const dl = await window.electronAPI.ollama.downloadInstaller()
     if (!dl.success) {
@@ -90,7 +101,10 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
 
     setState(prev => ({ ...prev, installerPath: dl.path }))
 
-    if (dl.platform === 'linux') return
+    if (dl.platform === 'linux') {
+      setState(prev => ({ ...prev, status: 'ready', installed: true, running: false, message: 'On Linux, please install Ollama via: curl -fsSL https://ollama.ai/install.sh | sh. Then restart this app.' }))
+      return
+    }
 
     const install = await window.electronAPI.ollama.installOllama(dl.path!)
     if (!install.success) {
@@ -98,19 +112,19 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
       return
     }
 
-    setState(prev => ({ ...prev, status: 'pulling', progress: 0, message: `Pulling ${selectedModel}...` }))
+    setState(prev => ({ ...prev, status: 'pulling', progress: 0, message: `Downloading ${selectedModel} model...` }))
 
     const pull = await window.electronAPI.ollama.pullModel(selectedModel)
     if (!pull.success) {
-      setState(prev => ({ ...prev, status: 'error', message: pull.error || 'Pull failed' }))
+      setState(prev => ({ ...prev, status: 'error', message: pull.error || 'Model pull failed' }))
     }
   }
 
   async function skipInstall() {
-    setState(prev => ({ ...prev, status: 'pulling', progress: 0, message: `Pulling ${selectedModel}...` }))
+    setState(prev => ({ ...prev, status: 'pulling', progress: 0, message: `Downloading ${selectedModel} model...` }))
     const pull = await window.electronAPI.ollama.pullModel(selectedModel)
     if (!pull.success) {
-      setState(prev => ({ ...prev, status: 'error', message: pull.error || 'Pull failed' }))
+      setState(prev => ({ ...prev, status: 'error', message: pull.error || 'Model pull failed' }))
     }
   }
 
@@ -131,6 +145,9 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
     )
   }
 
+  const isBusy = state.status === 'downloading' || state.status === 'installing' || state.status === 'pulling'
+  const stepInfo = getStepInfo(state.status)
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
@@ -142,39 +159,49 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
         <span className="text-sm font-medium">Local AI Setup</span>
       </div>
 
-      <div className="rounded-lg bg-[var(--bg-tertiary)] p-3 space-y-2">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-[var(--text-secondary)]">Status</span>
-          <span className={
-            state.status === 'error' ? 'text-red-400' :
-            state.status === 'complete' ? 'text-emerald-400' :
-            'text-[var(--text-primary)]'
-          }>
-            {state.message}
-          </span>
-        </div>
-
-        {(state.status === 'downloading' || state.status === 'installing' || state.status === 'pulling') && (
-          <div className="space-y-1">
-            <div className="h-1.5 rounded-full bg-[var(--bg-primary)] overflow-hidden">
-              <div
-                className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
-                style={{ width: `${Math.max(state.progress, 2)}%` }}
-              />
-            </div>
-            <p className="text-[10px] text-[var(--text-secondary)] text-right">{state.progress}%</p>
+      {isBusy && (
+        <div className="rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs text-[var(--text-primary)] font-medium">
+              Step {stepInfo.step}/{TOTAL_STEPS}: {stepInfo.label}
+            </span>
           </div>
-        )}
+          <div className="h-1.5 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[var(--accent)] transition-all duration-500"
+              style={{ width: `${Math.max(state.progress, 2)}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="text-[var(--text-secondary)]">{state.message}</span>
+            <span className="text-[var(--text-secondary)]">{state.progress}%</span>
+          </div>
+          <p className="text-[10px] text-[var(--text-secondary)]">
+            {state.status === 'downloading' && 'Downloading the Ollama installer (~300 MB). Speed depends on your connection.'}
+            {state.status === 'installing' && 'Running silent installer. This can take 1-2 minutes with no visible window.'}
+            {state.status === 'pulling' && `Downloading the ${selectedModel} AI model (${MODELS.find(m => m.id === selectedModel)?.size || 'several GB'}). This is the largest step.`}
+          </p>
+        </div>
+      )}
 
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-[var(--text-secondary)]">Model</span>
-          {state.status === 'checking' || state.status === 'downloading' || state.status === 'installing' ? (
-            <span className="text-[var(--text-secondary)]">-</span>
-          ) : (
+      {!isBusy && (
+        <div className="rounded-lg bg-[var(--bg-tertiary)] p-3 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-[var(--text-secondary)]">Status</span>
+            <span className={
+              state.status === 'error' ? 'text-red-400' :
+              'text-[var(--text-primary)]'
+            }>
+              {state.message}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-[var(--text-secondary)]">Model</span>
             <select
               value={selectedModel}
               onChange={e => setSelectedModel(e.target.value)}
-              disabled={state.status === 'pulling' || state.status === 'downloading'}
               className="bg-transparent text-[var(--text-primary)] outline-none cursor-pointer"
             >
               {MODELS.map(m => (
@@ -183,9 +210,9 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
                 </option>
               ))}
             </select>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {state.status === 'ready' && !state.installed && (
         <button
@@ -198,7 +225,7 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
 
       {state.status === 'ready' && state.installed && !state.running && (
         <div className="space-y-2">
-          <p className="text-xs text-amber-400">Ollama is installed but not running. Start it manually or pull a model.</p>
+          <p className="text-xs text-amber-400">Ollama is installed but not running. Start it from the Start Menu or run <code className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)]">ollama serve</code> in a terminal.</p>
           <button
             onClick={skipInstall}
             className="w-full py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
@@ -219,13 +246,6 @@ export function LocalModelSetup({ onComplete }: { onComplete?: () => void }) {
           </button>
         </div>
       )}
-
-      {state.status === 'downloading' || state.status === 'installing' || state.status === 'pulling' ? (
-        <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-          <div className="w-3 h-3 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
-          Please wait, this may take a few minutes...
-        </div>
-      ) : null}
 
       {state.status === 'ready' && (
         <p className="text-xs text-[var(--text-secondary)]">

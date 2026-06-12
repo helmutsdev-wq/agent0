@@ -11,15 +11,11 @@ const providers: AIProvider[] = [
   new HuggingFaceProvider()
 ]
 
-let initialized = false
-
 export async function initProviders(): Promise<void> {
   await Promise.all(providers.map(p => p.checkAvailability()))
-  initialized = true
 }
 
 export async function recheckProviders(): Promise<void> {
-  initialized = false
   await initProviders()
 }
 

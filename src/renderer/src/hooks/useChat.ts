@@ -9,6 +9,15 @@ export interface UIMessage {
   isStreaming?: boolean
 }
 
+export interface ToolEvent {
+  id: string
+  toolName: string
+  toolInput: Record<string, unknown>
+  status: 'running' | 'done'
+  result?: string
+  isError?: boolean
+}
+
 export function useChat() {
   const [messages, setMessages] = useState<UIMessage[]>([
     {
@@ -19,6 +28,7 @@ export function useChat() {
   ])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
   const abortRef = useRef<AbortController | null>(null)
   const messagesRef = useRef(messages)
 
@@ -30,6 +40,8 @@ export function useChat() {
     if (!content.trim() || isLoading) return
 
     setError(null)
+    setToolEvents([])
+
     const userMsg: UIMessage = {
       id: `${Date.now()}-user`,
       role: 'user',
@@ -77,24 +89,24 @@ export function useChat() {
           } else if (chunk.type === 'error') {
             setError(chunk.content)
           } else if (chunk.type === 'tool_use') {
-            const toolMsg = `\n\n_Using **${chunk.toolName}**..._\n`
-            fullResponse += toolMsg
-            setMessages(prev => {
-              const updated = [...prev]
-              const last = updated[updated.length - 1]
-              if (last?.isStreaming) {
-                updated[updated.length - 1] = { ...last, content: fullResponse }
-              }
-              return updated
-            })
+            setToolEvents(prev => [...prev, {
+              id: `${Date.now()}-${chunk.toolName}`,
+              toolName: chunk.toolName || 'tool',
+              toolInput: chunk.toolInput || {},
+              status: 'running'
+            }])
           } else if (chunk.type === 'tool_result') {
-            const resultMsg = `\`\`\`tool-result\n${chunk.toolResult}\n\`\`\`\n`
-            fullResponse += resultMsg
-            setMessages(prev => {
+            setToolEvents(prev => {
               const updated = [...prev]
-              const last = updated[updated.length - 1]
-              if (last?.isStreaming) {
-                updated[updated.length - 1] = { ...last, content: fullResponse }
+              const running = updated.filter(t => t.status === 'running')
+              if (running.length > 0) {
+                const idx = updated.indexOf(running[0])
+                updated[idx] = {
+                  ...running[0],
+                  status: 'done',
+                  result: chunk.toolResult || '',
+                  isError: !chunk.toolResult || chunk.toolResult.startsWith('Error') || chunk.toolResult.includes('failed')
+                }
               }
               return updated
             })
@@ -142,6 +154,7 @@ export function useChat() {
       }
     ])
     setError(null)
+    setToolEvents([])
   }, [])
 
   const updateConfig = useCallback((config: Parameters<typeof setAgentConfig>[0]) => {
@@ -152,6 +165,7 @@ export function useChat() {
     messages,
     isLoading,
     error,
+    toolEvents,
     sendMessage,
     stopGeneration,
     clearMessages,

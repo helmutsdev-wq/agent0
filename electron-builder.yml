@@ -2,13 +2,14 @@ appId: com.agent0.app
 productName: Agent0
 directories:
   buildResources: build
-  output: release
+  output: release2
 files:
   - out/**/*
   - "!node_modules/**/*"
 win:
   target:
     - nsis
+  signAndEditExecutable: false
   artifactName: "${productName}-Setup-${version}.${ext}"
 nsis:
   oneClick: false

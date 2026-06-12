@@ -23,6 +23,8 @@ export async function executeTool(tool: ToolCall): Promise<ToolResult> {
       )
     case 'bash':
       return bash(tool.input.command as string)
+    case 'list_files':
+      return listFiles(tool.input.path as string)
     case 'web_fetch':
       return webFetch(tool.input.url as string)
     default:
@@ -71,7 +73,7 @@ async function editFile(
         error: `Could not find oldString in ${path}`
       }
     }
-    const newContent = content.replace(oldString, newString)
+    const newContent = content.replaceAll(oldString, newString)
     const writeResult = await window.electronAPI.file.write(path, newContent)
     if (writeResult.error) {
       return { success: false, output: '', error: writeResult.error }
@@ -90,6 +92,21 @@ async function bash(command: string): Promise<ToolResult> {
       return { success: false, output, error: result.error }
     }
     return { success: true, output: output.slice(0, 50000) }
+  } catch (e) {
+    return { success: false, output: '', error: (e as Error).message }
+  }
+}
+
+async function listFiles(dirPath: string): Promise<ToolResult> {
+  try {
+    const path = dirPath || '.'
+    const result = await window.electronAPI.dir.list(path)
+    if (result.error) return { success: false, output: '', error: result.error }
+    const items = result.items || []
+    const output = (items as Array<{ name: string; isDir: boolean; size: number }>)
+      .map(i => `${i.isDir ? 'd' : 'f'} ${i.name} (${i.size} bytes)`)
+      .join('\n')
+    return { success: true, output }
   } catch (e) {
     return { success: false, output: '', error: (e as Error).message }
   }

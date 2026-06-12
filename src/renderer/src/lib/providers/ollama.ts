@@ -121,6 +121,8 @@ export class OllamaProvider extends AIProvider {
       const decoder = new TextDecoder()
       let buffer = ''
 
+      let sawDone = false
+
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -134,6 +136,7 @@ export class OllamaProvider extends AIProvider {
           try {
             const json = JSON.parse(line)
             if (json.done) {
+              sawDone = true
               onChunk({ type: 'done', content: '' })
             } else if (json.message?.content !== undefined) {
               onChunk({ type: 'text', content: json.message.content })
@@ -148,6 +151,7 @@ export class OllamaProvider extends AIProvider {
         try {
           const json = JSON.parse(buffer)
           if (json.done) {
+            sawDone = true
             onChunk({ type: 'done', content: '' })
           } else if (json.message?.content) {
             onChunk({ type: 'text', content: json.message.content })
@@ -155,6 +159,10 @@ export class OllamaProvider extends AIProvider {
         } catch {
           // ignore trailing partial
         }
+      }
+
+      if (!sawDone) {
+        onChunk({ type: 'done', content: '' })
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
