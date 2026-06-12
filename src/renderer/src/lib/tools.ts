@@ -84,9 +84,12 @@ async function editFile(
 
 async function bash(command: string): Promise<ToolResult> {
   try {
-    // Execute command - in a real app this would use a proper shell execution
-    // For now this is a placeholder that will be wired to Electron's main process
-    return { success: true, output: `[bash] Command executed (shell integration coming): ${command}` }
+    const result = await window.electronAPI.bash.exec(command)
+    const output = result.output || ''
+    if (result.error) {
+      return { success: false, output, error: result.error }
+    }
+    return { success: true, output: output.slice(0, 50000) }
   } catch (e) {
     return { success: false, output: '', error: (e as Error).message }
   }

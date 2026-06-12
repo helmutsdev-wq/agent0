@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { execSync } from 'child_process'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -55,4 +56,40 @@ ipcMain.handle('file:write', (_event, filePath: string, content: string) => {
 
 ipcMain.handle('file:exists', (_event, filePath: string) => {
   return existsSync(filePath)
+})
+
+ipcMain.handle('bash:exec', (_event, command: string) => {
+  try {
+    const output = execSync(command, {
+      encoding: 'utf-8',
+      timeout: 30000,
+      maxBuffer: 10 * 1024 * 1024
+    })
+    return { output }
+  } catch (e) {
+    const err = e as Error & { stdout?: string; stderr?: string }
+    return {
+      output: err.stdout || err.message,
+      error: err.stderr || err.message
+    }
+  }
+})
+
+ipcMain.handle('dir:list', (_event, dirPath: string) => {
+  try {
+    const { readdirSync, statSync } = require('fs')
+    const entries = readdirSync(dirPath)
+    const items = entries.map(name => {
+      const fullPath = join(dirPath, name)
+      try {
+        const stat = statSync(fullPath)
+        return { name, isDir: stat.isDirectory(), size: stat.size }
+      } catch {
+        return { name, isDir: false, size: 0 }
+      }
+    })
+    return { items }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
 })
