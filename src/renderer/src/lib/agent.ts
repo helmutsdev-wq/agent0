@@ -1,6 +1,6 @@
-import { ChatMessage, StreamChunk } from './providers/types'
+import { ChatMessage, StreamChunk, ToolCallPart } from './providers/types'
 import { getProvider, initProviders, getAllModels, getAvailableModels } from './providers'
-import { executeTool, ToolCall } from './tools'
+import { executeTool } from './tools'
 import { classifyAndRoute } from './router'
 import { t } from './i18n'
 
@@ -24,143 +24,6 @@ export function setAgentConfig(config: Partial<AgentConfig>) {
 
 export function getAgentConfig(): AgentConfig {
   return { ...currentConfig }
-}
-
-function stripToolCallFromText(text: string): string {
-  let out = ''
-  let i = 0
-  const marker = 'TOOL_CALL'
-  while (i < text.length) {
-    const markerIdx = text.indexOf(marker, i)
-    if (markerIdx === -1) {
-      out += text.slice(i)
-      break
-    }
-    out += text.slice(i, markerIdx)
-    const afterMarker = markerIdx + marker.length
-    const hasColon = text[afterMarker] === ':'
-    const searchFrom = hasColon ? afterMarker + 1 : afterMarker
-    const jsonStart = text.indexOf('{', searchFrom)
-    if (jsonStart === -1 || jsonStart - searchFrom > 2) {
-      i = afterMarker
-      continue
-    }
-    let depth = 0
-    let inString = false
-    let escape = false
-    let foundEnd = false
-    for (let j = jsonStart; j < text.length; j++) {
-      const ch = text[j]
-      if (escape) { escape = false; continue }
-      if (ch === '\\' && inString) { escape = true; continue }
-      if (ch === '"') { inString = !inString; continue }
-      if (inString) continue
-      if (ch === '{') depth++
-      if (ch === '}') {
-        depth--
-        if (depth === 0) {
-          i = j + 1
-          foundEnd = true
-          break
-        }
-      }
-    }
-    if (!foundEnd) {
-      break
-    }
-  }
-  return out.replace(/TOOL{3,}/gi, '').replace(/([A-Z]{2,})\1{2,}/g, '')
-}
-
-function extractToolCalls(content: string): ToolCall[] {
-  const calls: ToolCall[] = []
-
-  const marker = 'TOOL_CALL'
-  let searchFrom = 0
-  while (true) {
-    const markerIdx = content.indexOf(marker, searchFrom)
-    if (markerIdx === -1) break
-
-    const afterMarker = markerIdx + marker.length
-    const searchStart = content[afterMarker] === ':' ? afterMarker + 1 : afterMarker
-    const jsonStart = content.indexOf('{', searchStart)
-    if (jsonStart === -1 || jsonStart - searchStart > 2) {
-      searchFrom = afterMarker
-      continue
-    }
-
-    let depth = 0
-    let inString = false
-    let escape = false
-    let jsonEnd = -1
-    for (let i = jsonStart; i < content.length; i++) {
-      const ch = content[i]
-      if (escape) {
-        escape = false
-        continue
-      }
-      if (ch === '\\' && inString) {
-        escape = true
-        continue
-      }
-      if (ch === '"') {
-        inString = !inString
-        continue
-      }
-      if (inString) continue
-      if (ch === '{') depth++
-      if (ch === '}') {
-        depth--
-        if (depth === 0) {
-          jsonEnd = i
-          break
-        }
-      }
-    }
-
-    if (jsonEnd === -1) {
-      searchFrom = jsonStart + 1
-      continue
-    }
-
-    const jsonStr = content.slice(jsonStart, jsonEnd + 1)
-    searchFrom = jsonEnd + 1
-
-    try {
-      const parsed = JSON.parse(jsonStr)
-      const name = parsed.name as string
-      const input = parsed.input as Record<string, unknown> || parsed.arguments || {}
-      if (name) {
-        calls.push({ name, input })
-      }
-    } catch {
-      // skip
-    }
-  }
-
-  const jsonRegex = /```json\n([\s\S]*?)```/g
-  let match
-  while ((match = jsonRegex.exec(content)) !== null) {
-    try {
-      const json = JSON.parse(match[1])
-      if (json.tool_calls) {
-        for (const tc of json.tool_calls) {
-          const name = tc.function?.name || tc.name
-          let input = tc.function?.arguments || tc.input || {}
-          if (typeof input === 'string') {
-            try { input = JSON.parse(input) } catch { /* keep as string */ }
-          }
-          if (name) {
-            calls.push({ name, input })
-          }
-        }
-      }
-    } catch {
-      // skip
-    }
-  }
-
-  return calls
 }
 
 export async function runAgent(
@@ -189,10 +52,6 @@ export async function runAgent(
 
     const userInput = messages[messages.length - 1]?.content || ''
 
-    let activeProvider = currentConfig.provider
-    let activeModel = currentConfig.model
-
-    // Build ordered candidate list: route pick -> user selection -> remaining
     const candidates: Array<{ providerId: string; modelId: string; label: string }> = []
 
     if (currentConfig.useRouter && userInput && availableModels.length > 0) {
@@ -228,11 +87,11 @@ export async function runAgent(
       }
     }
 
-    const systemMessages: ChatMessage[] = [
-      { role: 'system', content: currentConfig.systemPrompt }
+    const allMessages: ChatMessage[] = [
+      { role: 'system', content: currentConfig.systemPrompt },
+      ...messages
     ]
 
-    const allMessages = [...systemMessages, ...messages]
     let maxIterations = 10
     let globalError = ''
 
@@ -251,92 +110,86 @@ export async function runAgent(
         onChunk({ type: 'info', content: t('agent.tryingOthers') })
       }
 
-      activeProvider = candidate.providerId
-      activeModel = candidate.modelId
-      setAgentConfig({ provider: activeProvider, model: activeModel })
+      setAgentConfig({ provider: candidate.providerId, model: candidate.modelId })
 
       let iteration = 0
-      let accumulatedContent = ''
       let failed = false
       const sessionToolKeys = new Set<string>()
+      const toolCallBuffer: Array<{ id: string; name: string; args: string }> = []
 
       while (iteration < maxIterations) {
         iteration++
-        accumulatedContent = ''
-        let rawBuffer = ''
-        let cleanLen = 0
 
-        await provider.chat(allMessages, activeModel, (chunk) => {
+        await provider.chat(allMessages, candidate.modelId, (chunk) => {
           if (chunk.type === 'text') {
-            rawBuffer += chunk.content
-            const cleaned = stripToolCallFromText(rawBuffer)
-            if (cleaned.length > cleanLen) {
-              const newText = cleaned.slice(cleanLen)
-              cleanLen = cleaned.length
-              if (newText) {
-                onChunk({ type: 'text', content: newText })
-              }
-            }
+            onChunk(chunk)
           } else if (chunk.type === 'error') {
             globalError = chunk.content
             failed = true
           } else if (chunk.type === 'done') {
-            onChunk(chunk)
+            // no-op, loop handles continuation
+          } else if (chunk.type === 'tool_use') {
+            onChunk({ type: 'tool_use', content: '', toolName: chunk.toolName, toolInput: chunk.toolInput })
+          } else if (chunk.type === 'tool_call') {
+            if (chunk.toolCallId && chunk.toolCallName) {
+              toolCallBuffer.push({
+                id: chunk.toolCallId,
+                name: chunk.toolCallName,
+                args: chunk.toolCallArgs || '{}'
+              })
+            }
           }
         }, signal)
 
         if (failed) break
 
-        accumulatedContent = rawBuffer
+        if (toolCallBuffer.length === 0) break
 
-        const toolCalls = extractToolCalls(accumulatedContent)
-        if (toolCalls.length === 0) break
+        // Process tool calls
+        const assistantToolCalls: ToolCallPart[] = []
+        let assistantContent = ''
 
-        const seenKeys = new Set<string>()
-        const uniqueCalls: ToolCall[] = []
-        let duplicateCount = 0
-        for (const tc of toolCalls) {
-          const key = `${tc.name}:${JSON.stringify(tc.input)}`
-          if (!seenKeys.has(key) && !sessionToolKeys.has(key)) {
-            seenKeys.add(key)
-            sessionToolKeys.add(key)
-            uniqueCalls.push(tc)
-          } else {
-            duplicateCount++
-          }
-          if (uniqueCalls.length >= 3) {
-            duplicateCount += Math.max(0, toolCalls.length - uniqueCalls.length - duplicateCount)
-            break
-          }
-        }
+        for (const tc of toolCallBuffer) {
+          const key = `${tc.name}:${tc.args}`
+          if (sessionToolKeys.has(key)) continue
+          sessionToolKeys.add(key)
 
-        if (duplicateCount > 0) {
-          allMessages.push({ role: 'system', content: `${duplicateCount} duplicate tool call(s) were skipped (already tried).` })
-        }
-
-        for (const toolCall of uniqueCalls) {
-          onChunk({
-            type: 'tool_use',
-            content: `Using ${toolCall.name}...`,
-            toolName: toolCall.name,
-            toolInput: toolCall.input
+          assistantToolCalls.push({
+            id: tc.id,
+            type: 'function',
+            function: { name: tc.name, arguments: tc.args }
           })
 
-          const result = await executeTool(toolCall)
+          let input: Record<string, unknown> = {}
+          try { input = JSON.parse(tc.args) } catch { /* */ }
+
+          const result = await executeTool({ name: tc.name, input })
 
           onChunk({
             type: 'tool_result',
             content: '',
-            toolName: toolCall.name,
+            toolName: tc.name,
             toolResult: result.output || (result.error || '')
           })
 
-          allMessages.push({ role: 'assistant', content: stripToolCallFromText(accumulatedContent) })
           allMessages.push({
-            role: 'system',
-            content: `${result.output || result.error || '(empty)'}`
+            role: 'assistant',
+            content: assistantContent || '',
+            tool_calls: assistantToolCalls
           })
+          allMessages.push({
+            role: 'tool',
+            content: result.output || result.error || '(empty)',
+            tool_call_id: tc.id
+          })
+
+          assistantToolCalls.length = 0
         }
+
+        toolCallBuffer.length = 0
+
+        // Send done chunk for UI
+        onChunk({ type: 'done', content: '' })
       }
 
       if (!failed) {

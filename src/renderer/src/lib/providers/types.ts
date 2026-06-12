@@ -18,17 +18,40 @@ export interface ProviderConfig {
   baseUrl?: string
 }
 
+export interface ToolDef {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    parameters: Record<string, unknown>
+  }
+}
+
+export interface ToolCallPart {
+  id: string
+  type: 'function'
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
+  role: 'user' | 'assistant' | 'system' | 'tool'
   content: string
+  tool_calls?: ToolCallPart[]
+  tool_call_id?: string
 }
 
 export interface StreamChunk {
-  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'info'
+  type: 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'info' | 'tool_call'
   content: string
   toolName?: string
   toolInput?: Record<string, unknown>
   toolResult?: string
+  toolCallId?: string
+  toolCallName?: string
+  toolCallArgs?: string
 }
 
 export abstract class AIProvider {

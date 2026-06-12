@@ -1,4 +1,5 @@
 import { AIProvider, ChatMessage, ModelConfig, StreamChunk } from './types'
+import { TOOL_DEFS } from '../toolDefs'
 
 interface OllamaModel {
   name: string
@@ -95,7 +96,12 @@ export class OllamaProvider extends AIProvider {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: modelId,
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          messages: messages.map(m => {
+            const msg: Record<string, unknown> = { role: m.role, content: m.content }
+            if (m.tool_calls) msg.tool_calls = m.tool_calls
+            return msg
+          }),
+          tools: TOOL_DEFS,
           stream: true
         }),
         signal
@@ -138,8 +144,29 @@ export class OllamaProvider extends AIProvider {
             if (json.done) {
               sawDone = true
               onChunk({ type: 'done', content: '' })
-            } else if (json.message?.content !== undefined) {
+            } else if (json.message?.content !== undefined && json.message?.content !== '') {
               onChunk({ type: 'text', content: json.message.content })
+            }
+            if (json.message?.tool_calls) {
+              for (const tc of json.message.tool_calls) {
+                const fn = tc.function || tc
+                try {
+                  const input = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : (fn.arguments || {})
+                  onChunk({
+                    type: 'tool_call',
+                    content: '',
+                    toolCallId: tc.id || fn.name,
+                    toolCallName: fn.name,
+                    toolCallArgs: typeof fn.arguments === 'string' ? fn.arguments : JSON.stringify(fn.arguments || {})
+                  })
+                  onChunk({
+                    type: 'tool_use',
+                    content: `Using ${fn.name}...`,
+                    toolName: fn.name,
+                    toolInput: input
+                  })
+                } catch { /* skip */ }
+              }
             }
           } catch {
             // partial JSON line, skip
@@ -155,6 +182,11 @@ export class OllamaProvider extends AIProvider {
             onChunk({ type: 'done', content: '' })
           } else if (json.message?.content) {
             onChunk({ type: 'text', content: json.message.content })
+          }
+          if (json.message?.tool_calls) {
+            for (const tc of json.message.tool_calls) {
+              // handle buffer tool calls same as above
+            }
           }
         } catch {
           // ignore trailing partial
