@@ -1,60 +1,75 @@
 import { useEffect, useRef, useState } from 'react'
-
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-}
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { useChat } from './hooks/useChat'
+import { initProviders, getProvider, getConfigs } from './lib/providers'
+import { getAgentConfig } from './lib/agent'
+import { SettingsDialog } from './components/SettingsDialog'
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: 'Hi! I\'m Agent0. I can help you with coding, research, and tasks across multiple AI models. What would you like to do?'
-    }
-  ])
+  const { messages, isLoading, error, sendMessage, stopGeneration, clearMessages } = useChat()
   const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [providerLabel, setProviderLabel] = useState('Ollama')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    initProviders().then(() => {
+      const cfg = getAgentConfig()
+      const p = getProvider(cfg.provider)
+      setProviderLabel(p?.name || 'Ollama')
+    })
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  function recheckProviders() {
+    initProviders().then(() => {
+      const cfg = getAgentConfig()
+      const p = getProvider(cfg.provider)
+      setProviderLabel(p?.name || 'Ollama')
+    })
+  }
+
   async function handleSend() {
     if (!input.trim() || isLoading) return
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: input.trim()
-    }
-    setMessages(prev => [...prev, userMessage])
+    const content = input.trim()
     setInput('')
-    setIsLoading(true)
-
-    setTimeout(() => {
-      const reply: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Agent functionality coming soon. This is a placeholder response.'
-      }
-      setMessages(prev => [...prev, reply])
-      setIsLoading(false)
-    }, 1000)
+    await sendMessage(content)
   }
 
   return (
     <div className="flex flex-col h-full">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-secondary)] shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-[var(--accent)] flex items-center justify-center text-sm font-bold">
-            A
+            A0
           </div>
           <span className="font-semibold text-sm">Agent0</span>
         </div>
-        <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-          <span className="px-2 py-1 rounded bg-[var(--bg-tertiary)]">Ollama</span>
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-1 rounded-md bg-[var(--bg-tertiary)] text-xs text-[var(--text-secondary)]">
+            {providerLabel}
+          </span>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+            </svg>
+          </button>
+          <button
+            onClick={clearMessages}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -71,25 +86,82 @@ function App() {
                   : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)] rounded-bl-md'
               }`}
             >
-              {msg.content}
+              {msg.role === 'user' ? (
+                msg.content
+              ) : (
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code({ className, children, ...props }) {
+                        const match = /language-(\w+)/.exec(className || '')
+                        const isInline = !match && !className
+                        if (isInline) {
+                          return (
+                            <code className="px-1 py-0.5 rounded bg-[var(--bg-primary)] text-xs" {...props}>
+                              {children}
+                            </code>
+                          )
+                        }
+                        return (
+                          <div className="relative my-2">
+                            <div className="flex items-center justify-between px-3 py-1.5 rounded-t-lg bg-[var(--bg-primary)] border-b border-[var(--border)]">
+                              <span className="text-[10px] text-[var(--text-secondary)] uppercase">
+                                {match?.[1] || 'code'}
+                              </span>
+                              <button
+                                onClick={() => navigator.clipboard.writeText(String(children))}
+                                className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                              >
+                                Copy
+                              </button>
+                            </div>
+                            <code
+                              className={`block px-3 py-2 rounded-b-lg bg-[var(--bg-primary)] text-xs overflow-x-auto ${className || ''}`}
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          </div>
+                        )
+                      },
+                      pre({ children }) {
+                        return <>{children}</>
+                      },
+                      a({ href, children }) {
+                        return (
+                          <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">
+                            {children}
+                          </a>
+                        )
+                      }
+                    }}
+                  >
+                    {msg.content || (msg.isStreaming ? '' : '...')}
+                  </ReactMarkdown>
+                  {msg.isStreaming && !msg.content && (
+                    <div className="flex gap-1.5 py-1">
+                      <div className="w-2 h-2 rounded-full bg-[var(--text-secondary)] animate-bounce" />
+                      <div className="w-2 h-2 rounded-full bg-[var(--text-secondary)] animate-bounce [animation-delay:0.1s]" />
+                      <div className="w-2 h-2 rounded-full bg-[var(--text-secondary)] animate-bounce [animation-delay:0.2s]" />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-[var(--bg-tertiary)] rounded-2xl rounded-bl-md px-4 py-3">
-              <div className="flex gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-[var(--text-secondary)] animate-bounce" />
-                <div className="w-2 h-2 rounded-full bg-[var(--text-secondary)] animate-bounce [animation-delay:0.1s]" />
-                <div className="w-2 h-2 rounded-full bg-[var(--text-secondary)] animate-bounce [animation-delay:0.2s]" />
-              </div>
+        {error && (
+          <div className="flex justify-center">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2 text-sm text-red-400 max-w-md text-center">
+              {error}
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-[var(--border)] p-4">
+      <div className="border-t border-[var(--border)] p-4 shrink-0">
         <div className="flex items-end gap-2 max-w-4xl mx-auto w-full">
           <div className="flex-1 relative">
             <textarea
@@ -112,18 +184,35 @@ function App() {
               }}
             />
           </div>
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading}
-            className="shrink-0 w-10 h-10 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 2L11 13" />
-              <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-            </svg>
-          </button>
+          {isLoading ? (
+            <button
+              onClick={stopGeneration}
+              className="shrink-0 w-10 h-10 rounded-xl bg-red-500/80 hover:bg-red-500 flex items-center justify-center transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={!input.trim()}
+              className="shrink-0 w-10 h-10 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 2L11 13" />
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
+
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        onRecheckProviders={recheckProviders}
+      />
     </div>
   )
 }
