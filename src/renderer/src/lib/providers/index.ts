@@ -12,9 +12,13 @@ const providers: AIProvider[] = [
 let initialized = false
 
 export async function initProviders(): Promise<void> {
-  if (initialized) return
   await Promise.all(providers.map(p => p.checkAvailability()))
   initialized = true
+}
+
+export async function recheckProviders(): Promise<void> {
+  initialized = false
+  await initProviders()
 }
 
 export function getProviders(): AIProvider[] {
@@ -26,14 +30,21 @@ export function getProvider(id: string): AIProvider | undefined {
 }
 
 export function getConfigs(): ProviderConfig[] {
-  return providers.map(p => ({
-    id: p.id,
-    name: p.name,
-    models: p.models,
-    apiKeyRequired: p.apiKeyRequired,
-    hasApiKey: p.models.some(m => m.available),
-    baseUrl: p.id === 'ollama' ? 'http://localhost:11434' : undefined
-  }))
+  return providers.map(p => {
+    let hasApiKey = !p.apiKeyRequired
+    if (p.apiKeyRequired) {
+      const key = localStorage.getItem(`${p.id}_api_key`)
+      hasApiKey = !!key
+    }
+    return {
+      id: p.id,
+      name: p.name,
+      models: p.models,
+      apiKeyRequired: p.apiKeyRequired,
+      hasApiKey,
+      baseUrl: p.id === 'ollama' ? 'http://localhost:11434' : undefined
+    }
+  })
 }
 
 export function getAvailableModels(): ModelConfig[] {

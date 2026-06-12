@@ -1,5 +1,5 @@
 import { ChatMessage, StreamChunk } from './providers/types'
-import { getProvider, initProviders, getAllModels } from './providers'
+import { getProvider, initProviders, getAllModels, getAvailableModels } from './providers'
 import { executeTool, ToolCall } from './tools'
 import { classifyAndRoute } from './router'
 
@@ -76,17 +76,43 @@ export async function runAgent(
   onChunk: (chunk: StreamChunk) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  await initProviders()
+  try {
+    await initProviders()
 
-  const userInput = messages[messages.length - 1]?.content || ''
+    const availableModels = getAvailableModels()
+    if (availableModels.length === 0) {
+      const allModels = getAllModels()
+      const hasOllama = allModels.some(m => m.id.startsWith('llama') || m.id.startsWith('mistral'))
+      const hasKeyed = allModels.some(m => m.provider !== 'ollama')
 
-  let activeProvider = currentConfig.provider
-  let activeModel = currentConfig.model
+      let hint = ''
+      if (hasOllama) {
+        hint = '\n\n**Quick setup:**\n1. Install Ollama from https://ollama.ai\n2. Run: `ollama pull llama3.2`\n3. Restart this app'
+      } else if (hasKeyed) {
+        hint = '\n\n**Quick setup:**\nGo to **Settings > API Keys** and add a key for Gemini or Groq.'
+      }
+      onChunk({ type: 'error', content: `No AI models are available.${hint}` })
+      return
+    }
 
-  if (currentConfig.useRouter && userInput) {
-    const allModels = getAllModels().filter(m => m.available)
-    if (allModels.length > 0) {
-      const route = classifyAndRoute(userInput, allModels)
+    const userInput = messages[messages.length - 1]?.content || ''
+
+    let activeProvider = currentConfig.provider
+    let activeModel = currentConfig.model
+
+    const selectedModel = availableModels.find(m => m.id === currentConfig.model)
+    if (!selectedModel) {
+      const fallback = availableModels[0]
+      activeProvider = fallback.provider
+      activeModel = fallback.id
+      onChunk({
+        type: 'text',
+        content: `*Previously selected model "${currentConfig.model}" is not available. Falling back to **${fallback.name}**.*\n\n`
+      })
+    }
+
+    if (currentConfig.useRouter && userInput && availableModels.length > 0) {
+      const route = classifyAndRoute(userInput, availableModels)
       if (route) {
         activeModel = route.modelId
         activeProvider = route.providerId
@@ -96,67 +122,70 @@ export async function runAgent(
         })
       }
     }
-  }
 
-  const provider = getProvider(activeProvider)
-  if (!provider) {
-    onChunk({
-      type: 'error',
-      content: `Provider "${activeProvider}" not found for routed model "${activeModel}"`
-    })
-    return
-  }
+    const provider = getProvider(activeProvider)
+    if (!provider) {
+      onChunk({
+        type: 'error',
+        content: `Provider "${activeProvider}" not found. Check your Settings.`
+      })
+      return
+    }
 
-  const systemMessages: ChatMessage[] = [
-    { role: 'system', content: currentConfig.systemPrompt }
-  ]
+    const systemMessages: ChatMessage[] = [
+      { role: 'system', content: currentConfig.systemPrompt }
+    ]
 
-  const allMessages = [...systemMessages, ...messages]
+    const allMessages = [...systemMessages, ...messages]
+    let accumulatedContent = ''
+    let maxIterations = 10
+    let iteration = 0
 
-  let accumulatedContent = ''
-  let maxIterations = 10
-  let iteration = 0
+    while (iteration < maxIterations) {
+      iteration++
+      accumulatedContent = ''
 
-  while (iteration < maxIterations) {
-    iteration++
-    accumulatedContent = ''
+      await provider.chat(allMessages, activeModel, (chunk) => {
+        if (chunk.type === 'text') {
+          accumulatedContent += chunk.content
+          onChunk(chunk)
+        } else if (chunk.type === 'error') {
+          onChunk(chunk)
+        } else if (chunk.type === 'done') {
+          onChunk(chunk)
+        }
+      }, signal)
 
-    await provider.chat(allMessages, activeModel, (chunk) => {
-      if (chunk.type === 'text') {
-        accumulatedContent += chunk.content
-        onChunk(chunk)
-      } else if (chunk.type === 'error') {
-        onChunk(chunk)
-      } else if (chunk.type === 'done') {
-        onChunk(chunk)
+      const toolCalls = extractToolCalls(accumulatedContent)
+      if (toolCalls.length === 0) break
+
+      for (const toolCall of toolCalls) {
+        onChunk({
+          type: 'tool_use',
+          content: `Using ${toolCall.name}...`,
+          toolName: toolCall.name,
+          toolInput: toolCall.input
+        })
+
+        const result = await executeTool(toolCall)
+
+        onChunk({
+          type: 'tool_result',
+          content: '',
+          toolName: toolCall.name,
+          toolResult: result.output || (result.error || '')
+        })
+
+        allMessages.push({ role: 'assistant', content: accumulatedContent })
+        allMessages.push({
+          role: 'system',
+          content: `Tool "${toolCall.name}" result:\n${result.output || result.error || '(empty)'}`
+        })
       }
-    }, signal)
-
-    const toolCalls = extractToolCalls(accumulatedContent)
-    if (toolCalls.length === 0) break
-
-    for (const toolCall of toolCalls) {
-      onChunk({
-        type: 'tool_use',
-        content: `Using ${toolCall.name}...`,
-        toolName: toolCall.name,
-        toolInput: toolCall.input
-      })
-
-      const result = await executeTool(toolCall)
-
-      onChunk({
-        type: 'tool_result',
-        content: '',
-        toolName: toolCall.name,
-        toolResult: result.output || (result.error || '')
-      })
-
-      allMessages.push({ role: 'assistant', content: accumulatedContent })
-      allMessages.push({
-        role: 'system',
-        content: `Tool "${toolCall.name}" result:\n${result.output || result.error || '(empty)'}`
-      })
+    }
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') {
+      onChunk({ type: 'error', content: `Agent error: ${(err as Error).message}` })
     }
   }
 }

@@ -89,65 +89,76 @@ export class OllamaProvider extends AIProvider {
     onChunk: (chunk: StreamChunk) => void,
     signal?: AbortSignal
   ): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: modelId,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        stream: true
-      }),
-      signal
-    })
+    try {
+      const res = await fetch(`${this.baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: modelId,
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          stream: true
+        }),
+        signal
+      })
 
-    if (!res.ok) {
-      const text = await res.text()
-      onChunk({ type: 'error', content: `Ollama error: ${text}` })
-      return
-    }
-
-    const reader = res.body?.getReader()
-    if (!reader) {
-      onChunk({ type: 'error', content: 'No response stream' })
-      return
-    }
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (!line.trim()) continue
+      if (!res.ok) {
+        const text = await res.text()
+        let msg = `Ollama error (${res.status})`
         try {
-          const json = JSON.parse(line)
+          const err = JSON.parse(text)
+          msg = err.error || msg
+        } catch { /* ignore */ }
+        onChunk({ type: 'error', content: `${msg}. Make sure Ollama is running and the model "${modelId}" is pulled.` })
+        return
+      }
+
+      const reader = res.body?.getReader()
+      if (!reader) {
+        onChunk({ type: 'error', content: 'Ollama: no response stream' })
+        return
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const json = JSON.parse(line)
+            if (json.done) {
+              onChunk({ type: 'done', content: '' })
+            } else if (json.message?.content !== undefined) {
+              onChunk({ type: 'text', content: json.message.content })
+            }
+          } catch {
+            // partial JSON line, skip
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const json = JSON.parse(buffer)
           if (json.done) {
             onChunk({ type: 'done', content: '' })
           } else if (json.message?.content) {
             onChunk({ type: 'text', content: json.message.content })
           }
         } catch {
-          // partial JSON line, skip
+          // ignore trailing partial
         }
       }
-    }
-
-    if (buffer.trim()) {
-      try {
-        const json = JSON.parse(buffer)
-        if (json.done) {
-          onChunk({ type: 'done', content: '' })
-        } else if (json.message?.content) {
-          onChunk({ type: 'text', content: json.message.content })
-        }
-      } catch {
-        // ignore
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        onChunk({ type: 'error', content: `Ollama connection failed: ${(err as Error).message}` })
       }
     }
   }

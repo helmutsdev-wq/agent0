@@ -34,8 +34,6 @@ export function SettingsDialog({
   onRecheckProviders: () => void
 }) {
   const [, forceUpdate] = React.useState(0)
-  const configs = React.useMemo(() => getConfigs(), [open])
-  const agentConfig = React.useMemo(() => getAgentConfig(), [open])
   const [activeTab, setActiveTab] = React.useState('models')
   const [localApiKeys, setLocalApiKeys] = React.useState<Record<string, string>>(() => ({
     gemini: localStorage.getItem('gemini_api_key') || '',
@@ -45,6 +43,8 @@ export function SettingsDialog({
   function saveApiKey(provider: string, key: string) {
     localStorage.setItem(`${provider}_api_key`, key)
     setLocalApiKeys(prev => ({ ...prev, [provider]: key }))
+    setTimeout(() => onRecheckProviders(), 100)
+    forceUpdate(n => n + 1)
   }
 
   function handleProviderChange(providerId: string) {
@@ -81,92 +81,105 @@ export function SettingsDialog({
         </TabsList>
 
         <TabsContent value="models" activeValue={activeTab}>
-          <div className="space-y-4">
-            <div>
-              <Label>Active Provider</Label>
-              <select
-                value={agentConfig.provider}
-                onChange={e => handleProviderChange(e.target.value)}
-                className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
-              >
-                {configs.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {(() => {
+            const agentConfig = getAgentConfig()
+            const configs = getConfigs()
+            return (
+              <div className="space-y-4">
+                <div>
+                  <Label>Active Provider</Label>
+                  <select
+                    value={agentConfig.provider}
+                    onChange={e => handleProviderChange(e.target.value)}
+                    className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                  >
+                    {configs.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div>
-              <Label>Active Model</Label>
-              <select
-                value={agentConfig.model}
-                onChange={e => {
-                  setAgentConfig({ model: e.target.value })
-                  forceUpdate(n => n + 1)
-                }}
-                className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
-              >
-                {configs
-                  .find(c => c.id === agentConfig.provider)
-                  ?.models.map(m => (
-                    <option key={m.id} value={m.id} disabled={!m.available}>
-                      {m.name} {!m.available ? '(unavailable)' : ''}
-                    </option>
-                  ))}
-              </select>
-            </div>
+                <div>
+                  <Label>Active Model</Label>
+                  <select
+                    value={agentConfig.model}
+                    onChange={e => {
+                      setAgentConfig({ model: e.target.value })
+                      forceUpdate(n => n + 1)
+                    }}
+                    className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                  >
+                    {configs
+                      .find(c => c.id === agentConfig.provider)
+                      ?.models.map(m => (
+                        <option key={m.id} value={m.id} disabled={!m.available}>
+                          {m.name} {!m.available ? '(unavailable)' : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
 
-            <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
-              <div>
-                <Label className="cursor-pointer">Smart Routing</Label>
-                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                  Auto-select best model for each task
-                </p>
+                <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
+                  <div>
+                    <Label className="cursor-pointer">Smart Routing</Label>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                      Auto-select best model for each task
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const cfg = getAgentConfig()
+                      setAgentConfig({ useRouter: !cfg.useRouter })
+                      forceUpdate(n => n + 1)
+                    }}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      agentConfig.useRouter ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                        agentConfig.useRouter ? 'translate-x-5' : ''
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="pt-2">
+                  <Label>Available Providers</Label>
+                  <div className="mt-2 space-y-2">
+                    {configs.map(c => {
+                      const modelsAvailable = c.models.filter(m => m.available).length
+                      const info = PROVIDER_NAMES[c.id] || { label: c.apiKeyRequired ? 'Requires Key' : 'Ready', color: 'default', docsUrl: '' }
+                      return (
+                        <div
+                          key={c.id}
+                          className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{c.name}</span>
+                            <Badge variant={
+                              modelsAvailable > 0 ? 'success' :
+                              c.id === 'ollama' ? 'error' :
+                              !c.hasApiKey ? 'warning' : 'error'
+                            }>
+                              {modelsAvailable > 0 ? 'Ready' :
+                               c.id === 'ollama' ? 'Disconnected' :
+                               !c.hasApiKey ? 'No Key' : 'Error'}
+                            </Badge>
+                          </div>
+                          <span className="text-xs text-[var(--text-secondary)]">
+                            {modelsAvailable} models
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
-              <button
-                onClick={() => {
-                  const cfg = getAgentConfig()
-                  setAgentConfig({ useRouter: !cfg.useRouter })
-                  onRecheckProviders()
-                }}
-                className={`relative w-10 h-5 rounded-full transition-colors ${
-                  agentConfig.useRouter ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                    agentConfig.useRouter ? 'translate-x-5' : ''
-                  }`}
-                />
-              </button>
-            </div>
-
-            <div className="pt-2">
-              <Label>Available Providers</Label>
-              <div className="mt-2 space-y-2">
-                {configs.map(c => {
-                  const info = PROVIDER_NAMES[c.id] || { label: c.apiKeyRequired ? 'Requires Key' : 'Ready', color: 'default', docsUrl: '' }
-                  return (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{c.name}</span>
-                        <Badge variant={(info.color as 'success' | 'warning' | 'error' | 'default')}>
-                          {info.label}
-                        </Badge>
-                      </div>
-                      <span className="text-xs text-[var(--text-secondary)]">
-                        {c.models.filter(m => m.available).length} models
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
+            )
+          })()}
         </TabsContent>
 
         <TabsContent value="keys" activeValue={activeTab}>
