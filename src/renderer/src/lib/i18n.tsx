@@ -159,8 +159,10 @@ const en: Dict = {
   'agent.keyHint': 'Go to Settings > API Keys and add a key for Gemini or Groq.',
   'agent.fallback': 'Previously selected model "{{model}}" is not available. Falling back to **{{fallback}}**.',
   'agent.tryingOthers': 'Still trying other models...',
+  'agent.trySwitch': 'Try switching to a different model or provider in Settings > Models.',
   'agent.routing': 'Routing to **{{task}}**: {{provider}}/{{model}}',
   'agent.providerNotFound': 'Provider "{{provider}}" not found. Check your Settings.',
+  'agent.modelFailed': 'Model "{{model}}" is not available. Go to Settings > Models and pick a different model or enable Smart Routing.',
   'agent.error': 'Agent error: {{message}}',
 
   // Providers
@@ -274,8 +276,10 @@ const lv: Dict = {
   'agent.keyHint': 'Dodies uz Iestatījumi > API Atslēgas un pievieno atslēgu priekš Gemini vai Groq.',
   'agent.fallback': 'Iepriekš izvēlētais modelis "{{model}}" nav pieejams. Pārslēdzos uz **{{fallback}}**.',
   'agent.tryingOthers': 'Joprojām mēģinu citus modeļus...',
+  'agent.trySwitch': 'Pamēģini pārslēgties uz citu modeli vai nodrošinātāju Iestatījumi > Modeļi.',
   'agent.routing': 'Maršrutē uz **{{task}}**: {{provider}}/{{model}}',
   'agent.providerNotFound': 'Nodrošinātājs "{{provider}}" nav atrasts. Pārbaudi Iestatījumus.',
+  'agent.modelFailed': 'Modelis "{{model}}" nav pieejams. Dodies uz Iestatījumi > Modeļi un izvēlies citu modeli vai ieslēdz Viedo maršrutēšanu.',
   'agent.error': 'Aģenta kļūda: {{message}}',
 
   // Providers

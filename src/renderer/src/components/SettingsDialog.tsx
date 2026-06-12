@@ -109,40 +109,44 @@ export function SettingsDialog({
             const configs = getConfigs()
             return (
               <div className="space-y-4">
-                <div>
-                  <Label>{t('settings.activeProvider')}</Label>
-                  <select
-                    value={agentConfig.provider}
-                    onChange={e => handleProviderChange(e.target.value)}
-                    className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
-                  >
-                    {configs.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {!agentConfig.useRouter && (
+                  <>
+                    <div>
+                      <Label>{t('settings.activeProvider')}</Label>
+                      <select
+                        value={agentConfig.provider}
+                        onChange={e => handleProviderChange(e.target.value)}
+                        className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                      >
+                        {configs.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                <div>
-                  <Label>{t('settings.activeModel')}</Label>
-                  <select
-                    value={agentConfig.model}
-                    onChange={e => {
-                      setAgentConfig({ model: e.target.value })
-                      forceUpdate(n => n + 1)
-                    }}
-                    className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
-                  >
-                    {configs
-                      .find(c => c.id === agentConfig.provider)
-                      ?.models.map(m => (
-                        <option key={m.id} value={m.id} disabled={!m.available}>
-                          {m.name} {!m.available ? t('settings.unavailable') : ''}
-                        </option>
-                      ))}
-                  </select>
-                </div>
+                    <div>
+                      <Label>{t('settings.activeModel')}</Label>
+                      <select
+                        value={agentConfig.model}
+                        onChange={e => {
+                          setAgentConfig({ model: e.target.value })
+                          forceUpdate(n => n + 1)
+                        }}
+                        className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                      >
+                        {configs
+                          .find(c => c.id === agentConfig.provider)
+                          ?.models.map(m => (
+                            <option key={m.id} value={m.id} disabled={!m.available}>
+                              {m.name} {!m.available ? t('settings.unavailable') : ''}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </>
+                )}
 
                 <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
                   <div>
