@@ -9,13 +9,15 @@ export interface AgentConfig {
   model: string
   systemPrompt: string
   useRouter: boolean
+  autoFallback: boolean
 }
 
 let currentConfig: AgentConfig = {
   provider: 'ollama',
   model: 'llama3.2',
   systemPrompt: t('system.prompt'),
-  useRouter: false
+  useRouter: false,
+  autoFallback: false
 }
 
 export function setAgentConfig(config: Partial<AgentConfig>) {
@@ -54,6 +56,8 @@ export async function runAgent(
 
     const candidates: Array<{ providerId: string; modelId: string; label: string }> = []
 
+    const useFallback = currentConfig.useRouter || currentConfig.autoFallback
+
     if (currentConfig.useRouter && userInput && availableModels.length > 0) {
       const route = classifyAndRoute(userInput, availableModels)
       if (route) {
@@ -63,15 +67,16 @@ export async function runAgent(
           label: t('agent.routing', { task: route.task, provider: route.providerId, model: route.modelId })
         })
       }
+    }
 
-      const userPick = availableModels.find(m => m.id === currentConfig.model)
-      const userModel = userPick || availableModels[0]
-      if (!userPick) {
-        onChunk({
-          type: 'info',
-          content: t('agent.fallback', { model: currentConfig.model, fallback: userModel.name })
-        })
-      }
+    const userPick = availableModels.find(m => m.id === currentConfig.model)
+    const userModel = userPick || availableModels[0]
+
+    if (!userPick && useFallback) {
+      onChunk({
+        type: 'info',
+        content: t('agent.fallback', { model: currentConfig.model, fallback: userModel.name })
+      })
       if (!candidates.some(c => c.modelId === userModel.id && c.providerId === userModel.provider)) {
         candidates.push({ providerId: userModel.provider, modelId: userModel.id, label: userModel.name })
       }
@@ -80,13 +85,20 @@ export async function runAgent(
           candidates.push({ providerId: m.provider, modelId: m.id, label: m.name })
         }
       }
+    } else if (!userPick && !useFallback) {
+      onChunk({ type: 'error', content: t('agent.modelFailed', { model: currentConfig.model || currentConfig.provider }) })
+      return
+    } else if (!useFallback) {
+      candidates.push({ providerId: userPick!.provider, modelId: userPick!.id, label: userPick!.name })
     } else {
-      const userPick = availableModels.find(m => m.id === currentConfig.model)
-      if (!userPick) {
-        onChunk({ type: 'error', content: t('agent.modelFailed', { model: currentConfig.model || currentConfig.provider }) })
-        return
+      if (!candidates.some(c => c.modelId === userModel.id && c.providerId === userModel.provider)) {
+        candidates.push({ providerId: userModel.provider, modelId: userModel.id, label: userModel.name })
       }
-      candidates.push({ providerId: userPick.provider, modelId: userPick.id, label: userPick.name })
+      for (const m of availableModels) {
+        if (!candidates.some(c => c.modelId === m.id && c.providerId === m.provider)) {
+          candidates.push({ providerId: m.provider, modelId: m.id, label: m.name })
+        }
+      }
     }
 
     const allMessages: ChatMessage[] = [
@@ -201,7 +213,7 @@ export async function runAgent(
     }
 
     if (globalError) {
-      const hint = !currentConfig.useRouter ? '\n\n' + t('agent.trySwitch') : ''
+      const hint = (!currentConfig.useRouter && !currentConfig.autoFallback) ? '\n\n' + t('agent.trySwitch') : ''
       onChunk({ type: 'error', content: globalError + hint })
     }
   } catch (err) {

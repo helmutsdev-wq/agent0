@@ -173,6 +173,33 @@ export function SettingsDialog({
                   </>
                 )}
 
+                {!agentConfig.useRouter && (
+                  <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
+                    <div>
+                      <Label className="cursor-pointer">{t('settings.autoFallback')}</Label>
+                      <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                        {t('settings.autoFallbackDesc')}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const cfg = getAgentConfig()
+                        setAgentConfig({ autoFallback: !cfg.autoFallback })
+                        forceUpdate(n => n + 1)
+                      }}
+                      className={`relative w-10 h-5 rounded-full transition-colors ${
+                        agentConfig.autoFallback ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                          agentConfig.autoFallback ? 'translate-x-5' : ''
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
                   <div>
                     <Label className="cursor-pointer">{t('settings.language')}</Label>
