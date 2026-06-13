@@ -8,9 +8,21 @@ export class OpenRouterProvider extends AIProvider {
 
   models: ModelConfig[] = [
     { id: 'nex-agi/nex-n2-pro:free', name: 'Nex-N2-Pro', provider: 'openrouter', capabilities: ['chat', 'code', 'reasoning'], speed: 'fast', quality: 'high', available: true, cost: 'free' },
-    { id: 'google/gemma-3-27b-it:free', name: 'Gemma 3 27B', provider: 'openrouter', capabilities: ['chat'], speed: 'fast', quality: 'medium', available: true, cost: 'free' },
     { id: 'meta-llama/llama-4-maverick:free', name: 'Llama 4 Maverick', provider: 'openrouter', capabilities: ['chat', 'code'], speed: 'fast', quality: 'high', available: true, cost: 'free' },
-    { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1', provider: 'openrouter', capabilities: ['code', 'reasoning'], speed: 'medium', quality: 'high', available: true, cost: 'free' }
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B', provider: 'openrouter', capabilities: ['chat', 'code'], speed: 'fast', quality: 'high', available: true, cost: 'free' },
+    { id: 'meta-llama/llama-3.1-405b-instruct:free', name: 'Llama 3.1 405B', provider: 'openrouter', capabilities: ['chat', 'code', 'reasoning'], speed: 'slow', quality: 'very_high', available: true, cost: 'free' },
+    { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1', provider: 'openrouter', capabilities: ['code', 'reasoning'], speed: 'medium', quality: 'high', available: true, cost: 'free' },
+    { id: 'deepseek/deepseek-r1-0528:free', name: 'DeepSeek R1 0528', provider: 'openrouter', capabilities: ['code', 'reasoning'], speed: 'medium', quality: 'high', available: true, cost: 'free' },
+    { id: 'qwen/qwen-3-235b-a22b:free', name: 'Qwen 3 235B', provider: 'openrouter', capabilities: ['chat', 'code', 'reasoning'], speed: 'medium', quality: 'very_high', available: true, cost: 'free' },
+    { id: 'qwen/qwen-3-coder:free', name: 'Qwen 3 Coder', provider: 'openrouter', capabilities: ['code'], speed: 'fast', quality: 'high', available: true, cost: 'free' },
+    { id: 'qwen/qwen3.6-35b-a3b:free', name: 'Qwen 3.6 35B-A3B', provider: 'openrouter', capabilities: ['chat', 'code'], speed: 'fast', quality: 'high', available: true, cost: 'free' },
+    { id: 'google/gemma-3-27b-it:free', name: 'Gemma 3 27B', provider: 'openrouter', capabilities: ['chat'], speed: 'fast', quality: 'medium', available: true, cost: 'free' },
+    { id: 'google/gemma-3-4b-it:free', name: 'Gemma 3 4B', provider: 'openrouter', capabilities: ['chat'], speed: 'very_fast', quality: 'low', available: true, cost: 'free' },
+    { id: 'mistralai/mistral-small-3.1-24b:free', name: 'Mistral Small 3.1 24B', provider: 'openrouter', capabilities: ['chat', 'code'], speed: 'fast', quality: 'high', available: true, cost: 'free' },
+    { id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B', provider: 'openrouter', capabilities: ['chat'], speed: 'very_fast', quality: 'medium', available: true, cost: 'free' },
+    { id: 'mistralai/devstral-2512:free', name: 'Devstral 2512', provider: 'openrouter', capabilities: ['code'], speed: 'fast', quality: 'high', available: true, cost: 'free' },
+    { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', name: 'Nemotron 3 Ultra', provider: 'openrouter', capabilities: ['chat', 'code', 'reasoning'], speed: 'slow', quality: 'very_high', available: true, cost: 'free' },
+    { id: 'minimax/minimax-m3:free', name: 'MiniMax M3', provider: 'openrouter', capabilities: ['chat', 'code'], speed: 'fast', quality: 'high', available: true, cost: 'free' }
   ]
 
   async checkAvailability(): Promise<boolean> {
