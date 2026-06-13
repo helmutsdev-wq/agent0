@@ -148,7 +148,57 @@ const markdownComponents = {
         {children}
       </a>
     )
+  },
+  details({ children, ...props }: { children?: React.ReactNode }) {
+    return (
+      <details className="my-2 rounded-lg border border-[var(--border)] overflow-hidden" {...props}>
+        {children}
+      </details>
+    )
+  },
+  summary({ children, ...props }: { children?: React.ReactNode }) {
+    return (
+      <summary className="px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] cursor-pointer hover:text-[var(--text-primary)] bg-[var(--bg-tertiary)] select-none" {...props}>
+        {children}
+      </summary>
+    )
+  },
+  img({ src, alt }: { src?: string; alt?: string }) {
+    if (!src) return null
+    return (
+      <img
+        src={src}
+        alt={alt || ''}
+        loading="lazy"
+        className="max-w-full rounded-lg my-2"
+        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+      />
+    )
   }
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }}
+      className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1 rounded hover:bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+      title="Copy message"
+    >
+      {copied ? (
+        <span className="text-[10px] text-emerald-400 font-medium px-0.5">Copied!</span>
+      ) : (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+    </button>
+  )
 }
 
 function useTheme(): { theme: string; toggleTheme: () => void } {
@@ -181,6 +231,19 @@ function App() {
 
   const hasMessages = messages.length > 1
   const forceUpdate = useReducer(n => n + 1, 0)[1]
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [zoom, setZoom] = useState(() => {
+    const saved = localStorage.getItem('agent0_zoom')
+    return saved ? parseInt(saved) : 100
+  })
+
+  const adjustZoom = useCallback((delta: number) => {
+    setZoom(prev => {
+      const next = Math.max(70, Math.min(150, prev + delta))
+      localStorage.setItem('agent0_zoom', String(next))
+      return next
+    })
+  }, [])
 
   const SUGGESTIONS = [
     t('suggest.trip'),
@@ -226,23 +289,54 @@ function App() {
         onCreate={createSession}
         onSwitch={switchSession}
         onDelete={deleteSession}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
-      <div className="flex flex-col flex-1 min-w-0">
-      <header className="flex items-center justify-between px-6 py-4 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[var(--accent)] flex items-center justify-center text-sm font-bold">
+      <div className="flex flex-col flex-1 min-w-0" style={{ zoom: `${zoom}%` }}>
+      <header className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-[var(--border)]">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            title="Toggle sidebar"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <div className="w-7 h-7 rounded-xl bg-[var(--accent)] flex items-center justify-center text-sm font-bold shrink-0">
             A0
           </div>
           <span className="font-semibold text-[15px] tracking-tight">{t('app.title')}</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => adjustZoom(-10)}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            title="Zoom out"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" />
+            </svg>
+          </button>
+          <span className="text-[11px] text-[var(--text-secondary)] w-8 text-center font-mono">{zoom}%</span>
+          <button
+            onClick={() => adjustZoom(10)}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            title="Zoom in"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
+            </svg>
+          </button>
+          <div className="w-px h-4 bg-[var(--border)] mx-1" />
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {theme === 'dark' ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="5" />
                 <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
                 <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
@@ -250,17 +344,17 @@ function App() {
                 <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
               </svg>
             ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
               </svg>
             )}
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
             title={t('app.settings')}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3" />
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
@@ -280,15 +374,18 @@ function App() {
                   className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     msg.role === 'user'
                       ? 'bg-[var(--accent)] text-white rounded-br-sm'
-                      : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)] rounded-bl-sm'
+                      : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)] rounded-bl-sm group'
                   }`}
                 >
                   {msg.role === 'user' ? (
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                   ) : (
                     <div>
-                      <div className="text-[10px] text-[var(--text-secondary)] mb-1 opacity-50">
-                        {activeModelLabel}
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] text-[var(--text-secondary)] opacity-50">
+                          {activeModelLabel}
+                        </span>
+                        <CopyButton text={msg.content} />
                       </div>
                       <div className="prose prose-invert prose-sm max-w-none">
                       <ReactMarkdown
@@ -371,8 +468,8 @@ function App() {
 
       <div className="px-6 pb-3 pt-2 shrink-0">
         <div className="max-w-3xl mx-auto space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
+          <div className="flex items-stretch gap-2">
+            <div className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--bg-tertiary)] overflow-hidden">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -385,7 +482,7 @@ function App() {
                 }}
                 placeholder={t('app.placeholder')}
                 rows={1}
-                className="w-full resize-none rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-secondary)] outline-none focus:border-[var(--accent)]/50 transition-colors"
+                className="w-full resize-none bg-transparent border-0 px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-secondary)] outline-none"
                 style={{ minHeight: '48px', maxHeight: '200px' }}
                 onInput={e => {
                   const el = e.currentTarget
@@ -397,7 +494,7 @@ function App() {
             {isLoading ? (
               <button
                 onClick={stopGeneration}
-                className="shrink-0 w-12 h-12 rounded-xl bg-red-500/80 hover:bg-red-500 flex items-center justify-center transition-colors"
+                className="shrink-0 w-12 rounded-xl bg-red-500/80 hover:bg-red-500 flex items-center justify-center transition-colors"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                   <rect x="6" y="6" width="12" height="12" rx="2" />
@@ -407,7 +504,7 @@ function App() {
               <button
                 onClick={() => handleSend()}
                 disabled={!input.trim()}
-                className="shrink-0 w-12 h-12 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all"
+                className="shrink-0 w-12 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all"
               >
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M22 2L11 13" />

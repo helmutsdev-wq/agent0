@@ -78,3 +78,28 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #444;
 }
+
+details > summary {
+  list-style: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > summary::before {
+  content: '▶';
+  display: inline-block;
+  width: 12px;
+  font-size: 8px;
+  margin-right: 6px;
+  transition: transform 0.15s;
+}
+
+details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+details > :not(summary) {
+  padding: 8px 12px;
+}
