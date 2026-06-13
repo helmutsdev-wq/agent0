@@ -388,7 +388,7 @@ function App() {
                         </span>
                         <CopyButton text={msg.content} />
                       </div>
-                      <div className="prose prose-invert prose-sm max-w-none">
+                      <div className="prose prose-invert max-w-none">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={markdownComponents}

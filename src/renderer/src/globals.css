@@ -25,8 +25,6 @@
 }
 
 * {
-  margin: 0;
-  padding: 0;
   box-sizing: border-box;
 }
 
@@ -102,4 +100,33 @@ details[open] > summary::before {
 
 details > :not(summary) {
   padding: 8px 12px;
+}
+
+.prose p, .prose ul, .prose ol, .prose blockquote, .prose pre, .prose table {
+  margin-top: 0.6em;
+  margin-bottom: 0.6em;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+}
+
+.prose h1:first-child, .prose h2:first-child, .prose h3:first-child, .prose h4:first-child {
+  margin-top: 0;
+}
+
+.prose li {
+  margin-top: 0.15em;
+  margin-bottom: 0.15em;
+}
+
+.prose ul, .prose ol {
+  padding-left: 1.5em;
+}
+
+.prose hr {
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  border-color: var(--border);
 }
