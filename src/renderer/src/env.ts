@@ -17,7 +17,8 @@ declare global {
         list: (dirPath: string) => Promise<{ items?: Array<{ name: string; isDir: boolean; size: number }>; error?: string }>
       }
       web: {
-        fetch: (url: string) => Promise<{ content?: string; status?: number; error?: string }>
+        fetch: (url: string) => Promise<{ content?: string; status?: number; error?: string }>,
+        search: (query: string) => Promise<{ content?: string; error?: string }>
       }
       workspace: {
         setRoot: (root: string) => Promise<boolean>

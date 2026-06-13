@@ -27,6 +27,8 @@ export async function executeTool(tool: ToolCall): Promise<ToolResult> {
       return listFiles(tool.input.path as string)
     case 'web_fetch':
       return webFetch(tool.input.url as string)
+    case 'web_search':
+      return webSearch(tool.input.query as string)
     default:
       return { success: false, output: '', error: `Unknown tool: ${tool.name}` }
   }
@@ -117,6 +119,16 @@ async function webFetch(url: string): Promise<ToolResult> {
     const result = await window.electronAPI.web.fetch(url)
     if (result.error) return { success: false, output: '', error: result.error }
     return { success: true, output: result.content?.slice(0, 10000) || '' }
+  } catch (e) {
+    return { success: false, output: '', error: (e as Error).message }
+  }
+}
+
+async function webSearch(query: string): Promise<ToolResult> {
+  try {
+    const result = await window.electronAPI.web.search(query)
+    if (result.error) return { success: false, output: '', error: result.error }
+    return { success: true, output: result.content || '' }
   } catch (e) {
     return { success: false, output: '', error: (e as Error).message }
   }

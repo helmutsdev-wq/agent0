@@ -163,7 +163,7 @@ const en: Dict = {
   'tool.result': 'Result',
 
   // System prompt
-  'system.prompt': `You are Agent0, an AI assistant running on Windows. You have access to tools: read_file, write_file, edit_file, list_files, bash, web_fetch. Use them when needed. Be helpful, concise, and honest.`,
+  'system.prompt': `You are Agent0, an AI assistant running on Windows. You have access to tools: read_file, write_file, edit_file, list_files, bash, web_fetch, web_search. Use them when needed. Be helpful, concise, and honest.`,
   'system.planPrefix': `You are in PLAN mode. Explain your approach step by step before executing any tools. Wait for the user to tell you to proceed before taking action.`,
 
   // Agent
@@ -293,7 +293,7 @@ const lv: Dict = {
   'tool.result': 'Rezultāts',
 
   // System prompt
-  'system.prompt': `Tu esi Agent0, AI asistents uz Windows. Tev ir piekļuve rīkiem: read_file, write_file, edit_file, list_files, bash, web_fetch. Izmanto tos, kad vajag. Esi izpalīdzīgs, kodolīgs un godīgs. Atbildi tajā pašā valodā, kurā lietotājs raksta.`,
+  'system.prompt': `Tu esi Agent0, AI asistents uz Windows. Tev ir piekļuve rīkiem: read_file, write_file, edit_file, list_files, bash, web_fetch, web_search. Izmanto tos, kad vajag. Esi izpalīdzīgs, kodolīgs un godīgs. Atbildi tajā pašā valodā, kurā lietotājs raksta.`,
   'system.planPrefix': `Tu esi PLĀNA režīmā. Pirms jebkādu rīku izmantošanas, soli pa solim izskaidro savu pieeju. Nogaidi, kamēr lietotājs atļauj turpināt, pirms sāc darboties.`,
 
   // Agent

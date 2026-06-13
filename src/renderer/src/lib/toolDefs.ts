@@ -87,5 +87,19 @@ export const TOOL_DEFS: ToolDef[] = [
         required: ['url']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Search the web for information using DuckDuckGo. Returns a list of results with titles, snippets, and URLs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'The search query' }
+        },
+        required: ['query']
+      }
+    }
   }
 ]

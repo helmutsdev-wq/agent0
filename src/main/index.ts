@@ -289,6 +289,52 @@ ipcMain.handle('web:fetch', (_event, url: string) => {
   })
 })
 
+// ─── Web Search IPC ───────────────────────────────────────────────────────
+
+ipcMain.handle('web:search', (_event, query: string) => {
+  return new Promise((resolve) => {
+    const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`
+
+    https.get(url, { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }, (res) => {
+      let data = ''
+      res.on('data', (chunk: string) => { data += chunk })
+      res.on('end', () => {
+        const results: Array<{ title: string; snippet: string; url: string }> = []
+        const linkRegex = /<a[^>]+class="result-link"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi
+        const snippetRegex = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/gi
+        const urls: string[] = []
+        const titles: string[] = []
+        const snippets: string[] = []
+
+        let m
+        while ((m = linkRegex.exec(data)) !== null) {
+          titles.push(m[2].trim().replace(/<[^>]+>/g, ''))
+          urls.push(m[1].replace(/^\/\/?/, 'https://'))
+        }
+        while ((m = snippetRegex.exec(data)) !== null) {
+          snippets.push(m[1].trim().replace(/<[^>]+>/g, ''))
+        }
+
+        const count = Math.min(titles.length, urls.length, 8)
+        for (let i = 0; i < count; i++) {
+          results.push({ title: titles[i] || '', snippet: snippets[i] || '', url: urls[i] || '' })
+        }
+
+        const output = results.length > 0
+          ? results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.snippet}\n   ${r.url}`).join('\n\n')
+          : 'No results found.'
+
+        resolve({ content: output })
+      })
+    }).on('error', (err) => {
+      resolve({ error: `Search failed: ${err.message}` })
+    }).on('timeout', function () {
+      this.destroy()
+      resolve({ error: 'Search timed out' })
+    })
+  })
+})
+
 // ─── Ollama One-Click Setup ────────────────────────────────────────────
 
 function sendProgress(event: IpcMainInvokeEvent, data: { stage: string; percent: number; message: string }) {

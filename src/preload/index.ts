@@ -16,7 +16,8 @@ const api = {
     list: (dirPath: string) => ipcRenderer.invoke('dir:list', dirPath)
   },
   web: {
-    fetch: (url: string) => ipcRenderer.invoke('web:fetch', url)
+    fetch: (url: string) => ipcRenderer.invoke('web:fetch', url),
+    search: (query: string) => ipcRenderer.invoke('web:search', query)
   },
   workspace: {
     setRoot: (root: string) => ipcRenderer.invoke('workspace:set-root', root),
