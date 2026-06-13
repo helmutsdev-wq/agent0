@@ -282,17 +282,7 @@ function App() {
   }, [input, isLoading, sendMessage])
 
   return (
-    <div className="flex h-full">
-      <SessionSidebar
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onCreate={createSession}
-        onSwitch={switchSession}
-        onDelete={deleteSession}
-        open={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
-      />
-      <div className="flex flex-col flex-1 min-w-0" style={{ zoom: `${zoom}%` }}>
+    <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-[var(--border)]">
         <div className="flex items-center gap-2">
           <button
@@ -361,6 +351,17 @@ function App() {
           </button>
         </div>
       </header>
+      <div className="flex flex-1 overflow-hidden">
+      <SessionSidebar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onCreate={createSession}
+        onSwitch={switchSession}
+        onDelete={deleteSession}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+      />
+      <div className="flex flex-col flex-1 min-w-0" style={{ zoom: `${zoom}%` }}>
 
       <div className="flex-1 overflow-y-auto px-6">
         {hasMessages ? (
@@ -560,6 +561,7 @@ function App() {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       <SettingsDialog
