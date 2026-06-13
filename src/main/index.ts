@@ -1,16 +1,60 @@
-import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent, Menu } from 'electron'
-import { join, resolve, normalize } from 'path'
+import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent, Menu, dialog } from 'electron'
+import { join, resolve, relative, normalize, isAbsolute } from 'path'
 import { existsSync, readFileSync, writeFileSync, mkdtempSync } from 'fs'
-import { execSync, spawn, execFile } from 'child_process'
+import { spawnSync, spawn, execFile } from 'child_process'
 import https from 'https'
 import http from 'http'
 import { tmpdir } from 'os'
 
-const BLOCKED_DIRS = [
-  '/sys', '/proc', '/dev',
-  'C:\\Windows', 'C:\\Windows\\System32', 'C:\\Windows\\SysWOW64',
-  'C:\\ProgramData', '/etc', '/boot', '/root'
-]
+// ─── Workspace Scoping ────────────────────────────────────────────────────
+
+let workspaceRoot: string = ''
+
+function isInsideWorkspace(filePath: string): boolean {
+  if (!workspaceRoot) return true // no workspace set — allow (with blocklist still checked)
+  const root = resolve(workspaceRoot)
+  const candidate = resolve(root, normalize(filePath))
+  const rel = relative(root, candidate)
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+function isPathSafe(filePath: string): boolean {
+  if (workspaceRoot) return isInsideWorkspace(filePath)
+
+  // Legacy blocklist for when no workspace is set
+  const blocked = [
+    'C:\\Windows', 'C:\\Windows\\System32', 'C:\\Windows\\SysWOW64',
+    'C:\\ProgramData', '/sys', '/proc', '/dev', '/etc', '/boot', '/root'
+  ]
+  const resolved = resolve(normalize(filePath))
+  for (const b of blocked) {
+    if (normalize(resolved).toLowerCase().startsWith(normalize(b).toLowerCase())) {
+      return false
+    }
+  }
+  return true
+}
+
+// ─── Bash Confirmation Dialog ─────────────────────────────────────────────
+
+let mainWindow: BrowserWindow | null = null
+
+async function confirmBashCommand(command: string): Promise<boolean> {
+  if (!mainWindow) return false
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    buttons: ['Cancel', 'Execute'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Execute Command?',
+    message: 'The AI agent wants to run this command:',
+    detail: command,
+    icon: null
+  })
+  return response === 1
+}
+
+// ─── Blocked Command Patterns ──────────────────────────────────────────────
 
 const DANGEROUS_COMMANDS = [
   /rm\s+-rf\s+\//, /dd\s+if=/, />\s*\/dev\/sd/,
@@ -18,24 +62,12 @@ const DANGEROUS_COMMANDS = [
   /rd\s+\/s\s+C:\\/i, /format\s+C:/i
 ]
 
-function isPathSafe(filePath: string): boolean {
-  const resolved = resolve(normalize(filePath))
-  for (const blocked of BLOCKED_DIRS) {
-    if (normalize(resolved).toLowerCase().startsWith(normalize(blocked).toLowerCase())) {
-      return false
-    }
-  }
-  return true
-}
-
 function isCommandSafe(command: string): boolean {
   for (const pattern of DANGEROUS_COMMANDS) {
     if (pattern.test(command)) return false
   }
   return true
 }
-
-let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -92,11 +124,20 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
 
+// ─── Workspace IPC ────────────────────────────────────────────────────────
+
+ipcMain.handle('workspace:set-root', (_event, root: string) => {
+  workspaceRoot = root
+  return true
+})
+
+ipcMain.handle('workspace:get-root', () => workspaceRoot)
+
 // ─── File System IPC ───────────────────────────────────────────────────
 
 ipcMain.handle('file:read', (_event, filePath: string) => {
   try {
-    if (!isPathSafe(filePath)) return { error: 'Access denied: path restricted' }
+    if (!isPathSafe(filePath)) return { error: 'Access denied: outside workspace' }
     return { content: readFileSync(filePath, 'utf-8') }
   } catch (e) {
     return { error: (e as Error).message }
@@ -105,7 +146,7 @@ ipcMain.handle('file:read', (_event, filePath: string) => {
 
 ipcMain.handle('file:write', (_event, filePath: string, content: string) => {
   try {
-    if (!isPathSafe(filePath)) return { error: 'Access denied: path restricted' }
+    if (!isPathSafe(filePath)) return { error: 'Access denied: outside workspace' }
     writeFileSync(filePath, content, 'utf-8')
     return { success: true }
   } catch (e) {
@@ -118,27 +159,9 @@ ipcMain.handle('file:exists', (_event, filePath: string) => {
   return existsSync(filePath)
 })
 
-ipcMain.handle('bash:exec', (_event, command: string) => {
-  try {
-    if (!isCommandSafe(command)) return { error: 'Blocked: dangerous command detected' }
-    const output = execSync(command, {
-      encoding: 'utf-8',
-      timeout: 30000,
-      maxBuffer: 10 * 1024 * 1024
-    })
-    return { output }
-  } catch (e) {
-    const err = e as Error & { stdout?: string; stderr?: string }
-    return {
-      output: err.stdout || err.message,
-      error: err.stderr || err.message
-    }
-  }
-})
-
 ipcMain.handle('dir:list', (_event, dirPath: string) => {
   try {
-    if (!isPathSafe(dirPath)) return { error: 'Access denied: path restricted' }
+    if (!isPathSafe(dirPath)) return { error: 'Access denied: outside workspace' }
     const { readdirSync, statSync } = require('fs')
     const entries = readdirSync(dirPath)
     const items = entries.map((name: string) => {
@@ -156,21 +179,95 @@ ipcMain.handle('dir:list', (_event, dirPath: string) => {
   }
 })
 
+// ─── Bash IPC ─────────────────────────────────────────────────────────────
+
+ipcMain.handle('bash:exec', async (_event, command: string) => {
+  try {
+    if (!isCommandSafe(command)) return { error: 'Blocked: dangerous command detected' }
+
+    const confirmed = await confirmBashCommand(command)
+    if (!confirmed) return { error: 'Execution cancelled — user denied permission' }
+
+    return new Promise((resolve) => {
+      const proc = spawn(command, [], { shell: true, timeout: 30000 })
+      let stdout = ''
+      let stderr = ''
+
+      proc.stdout?.on('data', (data: Buffer) => { stdout += data.toString() })
+      proc.stderr?.on('data', (data: Buffer) => { stderr += data.toString() })
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve({ output: stdout.slice(0, 50000) })
+        } else {
+          resolve({ output: stdout.slice(0, 50000), error: stderr.slice(0, 5000) || `Exit code ${code}` })
+        }
+      })
+
+      proc.on('error', (err) => {
+        resolve({ error: err.message })
+      })
+    })
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
 // ─── Web Fetch IPC ──────────────────────────────────────────────────────
+
+function isPrivateIP(hostname: string): boolean {
+  const ip = hostname.toLowerCase()
+  return (
+    ip === 'localhost' ||
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip.startsWith('10.') ||
+    ip.startsWith('172.16.') ||
+    ip.startsWith('192.168.') ||
+    ip.endsWith('.local') ||
+    ip.endsWith('.internal')
+  )
+}
 
 ipcMain.handle('web:fetch', (_event, url: string) => {
   return new Promise((resolve) => {
-    const protocol = url.startsWith('https') ? https : http
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        resolve({ error: 'Only http and https URLs are allowed' })
+        return
+      }
+      if (isPrivateIP(parsed.hostname)) {
+        resolve({ error: 'Access denied: cannot fetch local/private addresses' })
+        return
+      }
+    } catch {
+      resolve({ error: 'Invalid URL' })
+      return
+    }
+
+    const protocol = parsed.protocol === 'https:' ? https : http
 
     function doFetch(fetchUrl: string, redirects: number) {
       if (redirects > 5) {
         resolve({ error: 'Too many redirects' })
         return
       }
+
       const req = protocol.get(fetchUrl, { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }, (res) => {
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          const redirectUrl = new URL(res.headers.location, fetchUrl).href
-          doFetch(redirectUrl, redirects + 1)
+          try {
+            const redirectUrl = new URL(res.headers.location, fetchUrl).href
+            const redirectParsed = new URL(redirectUrl)
+            if (isPrivateIP(redirectParsed.hostname)) {
+              resolve({ error: 'Access denied: redirect to local/private address' })
+              return
+            }
+            doFetch(redirectUrl, redirects + 1)
+          } catch {
+            resolve({ error: 'Invalid redirect URL' })
+          }
           return
         }
         let data = ''
@@ -192,11 +289,11 @@ ipcMain.handle('web:fetch', (_event, url: string) => {
   })
 })
 
+// ─── Ollama One-Click Setup ────────────────────────────────────────────
+
 function sendProgress(event: IpcMainInvokeEvent, data: { stage: string; percent: number; message: string }) {
   event.sender.send('ollama:progress', data)
 }
-
-// ─── Ollama One-Click Setup ────────────────────────────────────────────
 
 function getOllamaBinary(): string {
   if (process.platform === 'win32') {
@@ -217,8 +314,8 @@ function isOllamaInstalled(): boolean {
   try {
     const bin = getOllamaBinary()
     if (!existsSync(bin) && process.platform === 'win32') return false
-    execSync(`${bin} --version`, { encoding: 'utf-8', timeout: 5000 })
-    return true
+    const result = spawnSync(bin, ['--version'], { encoding: 'utf-8', timeout: 5000 })
+    return result.status === 0
   } catch {
     return false
   }
@@ -227,8 +324,8 @@ function isOllamaInstalled(): boolean {
 function isOllamaRunning(): boolean {
   try {
     const bin = getOllamaBinary()
-    execSync(`${bin} list`, { encoding: 'utf-8', timeout: 5000 })
-    return true
+    const result = spawnSync(bin, ['list'], { encoding: 'utf-8', timeout: 5000 })
+    return result.status === 0
   } catch {
     return false
   }
@@ -293,6 +390,22 @@ ipcMain.handle('ollama:download-installer', async (event) => {
 })
 
 ipcMain.handle('ollama:install-ollama', async (event, installerPath: string) => {
+  // Confirm with user before installing
+  if (mainWindow) {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      buttons: ['Cancel', 'Install'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Install Ollama?',
+      message: 'The app is about to install Ollama on your system.',
+      detail: `Ollama will be installed silently. This will download and install:\n\n  • ollama.exe (AI model runner)\n  • CLI tools for managing models\n\nYou can uninstall anytime from Windows Settings > Apps.`
+    })
+    if (response === 0) {
+      return { success: false, error: 'Install cancelled by user' }
+    }
+  }
+
   sendProgress(event, { stage: 'installing', percent: 50, message: 'Installing Ollama (this may take 1-2 minutes)...' })
 
   return new Promise((resolve) => {

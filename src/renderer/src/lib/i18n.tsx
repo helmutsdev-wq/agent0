@@ -68,6 +68,8 @@ const en: Dict = {
   'app.copy': 'Copy',
   'app.code': 'code',
   'app.thinking': 'Thinking...',
+  'app.modeBuild': 'Build',
+  'app.modePlan': 'Plan',
 
   // Suggestions
   'suggest.trip': 'Plan a weekend trip',
@@ -90,6 +92,8 @@ const en: Dict = {
   'settings.language': 'Language',
   'settings.autoFallback': 'Auto-fallback',
   'settings.autoFallbackDesc': 'Try other models if selected one fails',
+  'settings.workspaceRoot': 'Workspace Root',
+  'settings.workspaceRootDesc': 'Restrict file tools to this directory (empty = no restriction)',
   'settings.activeProvider': 'Active Provider',
   'settings.activeModel': 'Active Model',
   'settings.smartRouting': 'Smart Routing',
@@ -155,6 +159,7 @@ const en: Dict = {
 
   // System prompt
   'system.prompt': `You are Agent0, an AI assistant running on Windows. You have access to tools: read_file, write_file, edit_file, list_files, bash, web_fetch. Use them when needed. Be helpful, concise, and honest.`,
+  'system.planPrefix': `You are in PLAN mode. Explain your approach step by step before executing any tools. Wait for the user to tell you to proceed before taking action.`,
 
   // Agent
   'agent.noModels': 'No AI models are available.',
@@ -188,6 +193,8 @@ const lv: Dict = {
   'app.copy': 'Kopēt',
   'app.code': 'kods',
   'app.thinking': 'Domā...',
+  'app.modeBuild': 'Build',
+  'app.modePlan': 'Plāns',
 
   // Suggestions
   'suggest.trip': 'Izplāno nedēļas nogales ceļojumu',
@@ -210,6 +217,8 @@ const lv: Dict = {
   'settings.language': 'Valoda',
   'settings.autoFallback': 'Automātiska pārslēgšanās',
   'settings.autoFallbackDesc': 'Ja izvēlētais modelis nestrādā, izmēģina citus',
+  'settings.workspaceRoot': 'Darba mape',
+  'settings.workspaceRootDesc': 'Ierobežo failu rīkus uz šo mapi (tukšs = bez ierobežojuma)',
   'settings.activeProvider': 'Aktīvais nodrošinātājs',
   'settings.activeModel': 'Aktīvais modelis',
   'settings.smartRouting': 'Viedā maršrutēšana',
@@ -275,6 +284,7 @@ const lv: Dict = {
 
   // System prompt
   'system.prompt': `Tu esi Agent0, AI asistents uz Windows. Tev ir piekļuve rīkiem: read_file, write_file, edit_file, list_files, bash, web_fetch. Izmanto tos, kad vajag. Esi izpalīdzīgs, kodolīgs un godīgs. Atbildi tajā pašā valodā, kurā lietotājs raksta.`,
+  'system.planPrefix': `Tu esi PLĀNA režīmā. Pirms jebkādu rīku izmantošanas, soli pa solim izskaidro savu pieeju. Nogaidi, kamēr lietotājs atļauj turpināt, pirms sāc darboties.`,
 
   // Agent
   'agent.noModels': 'Nav pieejami AI modeļi.',

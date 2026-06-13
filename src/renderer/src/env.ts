@@ -19,6 +19,10 @@ declare global {
       web: {
         fetch: (url: string) => Promise<{ content?: string; status?: number; error?: string }>
       }
+      workspace: {
+        setRoot: (root: string) => Promise<boolean>
+        getRoot: () => Promise<string>
+      }
       ollama: {
         checkInstalled: () => Promise<{ installed: boolean; running: boolean; platform: string }>
         downloadInstaller: () => Promise<{ success: boolean; path?: string; error?: string; platform?: string }>

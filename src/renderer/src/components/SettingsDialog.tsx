@@ -218,6 +218,38 @@ export function SettingsDialog({
                   </select>
                 </div>
 
+                <div className="rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
+                  <Label className="mb-1 block">{t('settings.workspaceRoot')}</Label>
+                  <p className="text-xs text-[var(--text-secondary)] mb-2">
+                    {t('settings.workspaceRootDesc')}
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={agentConfig.workspaceRoot}
+                      onChange={e => {
+                        setAgentConfig({ workspaceRoot: e.target.value })
+                        window.electronAPI.workspace.setRoot(e.target.value)
+                        forceUpdate(n => n + 1)
+                      }}
+                      placeholder="C:\Users\..."
+                      className="flex-1 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                    />
+                    {agentConfig.workspaceRoot && (
+                      <button
+                        onClick={() => {
+                          setAgentConfig({ workspaceRoot: '' })
+                          window.electronAPI.workspace.setRoot('')
+                          forceUpdate(n => n + 1)
+                        }}
+                        className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors shrink-0"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="pt-2">
                   <Label>{t('settings.availableProviders')}</Label>
                   <div className="mt-2 space-y-2">

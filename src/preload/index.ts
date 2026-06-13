@@ -18,6 +18,10 @@ const api = {
   web: {
     fetch: (url: string) => ipcRenderer.invoke('web:fetch', url)
   },
+  workspace: {
+    setRoot: (root: string) => ipcRenderer.invoke('workspace:set-root', root),
+    getRoot: () => ipcRenderer.invoke('workspace:get-root')
+  },
   ollama: {
     checkInstalled: () => ipcRenderer.invoke('ollama:check-installed'),
     downloadInstaller: () => ipcRenderer.invoke('ollama:download-installer'),

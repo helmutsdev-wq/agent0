@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useReducer } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChat, ToolEvent } from './hooks/useChat'
 import { initProviders, getConfigs } from './lib/providers'
-import { setAgentConfig, getAgentConfig } from './lib/agent'
+import { setAgentConfig, getAgentConfig, getEffectiveSystemPrompt, Mode } from './lib/agent'
 import { SettingsDialog } from './components/SettingsDialog'
 import { useLanguage } from './lib/i18n'
-import { getUsage } from './lib/usage'
 
 function ModelSelector({ label, onSelect }: { label: string; onSelect: () => void }) {
   const [open, setOpen] = useState(false)
@@ -180,6 +179,7 @@ function App() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const hasMessages = messages.length > 1
+  const forceUpdate = useReducer(n => n + 1, 0)[1]
 
   const SUGGESTIONS = [
     t('suggest.trip'),
@@ -192,6 +192,10 @@ function App() {
 
   useEffect(() => {
     initProviders()
+    const cfg = getAgentConfig()
+    if (cfg.workspaceRoot) {
+      window.electronAPI.workspace.setRoot(cfg.workspaceRoot)
+    }
   }, [])
 
   useEffect(() => {
@@ -353,7 +357,7 @@ function App() {
       </div>
 
       <div className="px-6 pb-3 pt-2 shrink-0">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl mx-auto space-y-2">
           <div className="flex items-center gap-2">
             <div className="flex-1">
               <textarea
@@ -399,65 +403,68 @@ function App() {
               </button>
             )}
           </div>
+
+          <div className="flex items-center gap-3 px-1 py-1 min-h-[28px]">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => {
+                  const cfg = getAgentConfig()
+                  const next: Mode = cfg.mode === 'build' ? 'plan' : 'build'
+                  setAgentConfig({ mode: next })
+                  forceUpdate(n => n + 1)
+                }}
+                className={`text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors ${
+                  getAgentConfig().mode === 'plan'
+                    ? 'border-[var(--accent)]/50 text-[var(--accent)] bg-[var(--accent)]/10'
+                    : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {getAgentConfig().mode === 'plan' ? t('app.modePlan') : t('app.modeBuild')}
+              </button>
+              <span className="text-[10px] text-[var(--text-secondary)] opacity-40">·</span>
+            </div>
+
+            {hasMessages && (
+              <>
+                <ModelSelector label={activeModelLabel} onSelect={recheckProviders} />
+                <span className="text-[10px] text-[var(--text-secondary)] opacity-30">·</span>
+              </>
+            )}
+
+            {sessionStats.tokens > 0 && (
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <div className="flex-1 h-1 rounded-full bg-[var(--bg-tertiary)] overflow-hidden max-w-24">
+                  <div
+                    className="h-full rounded-full bg-[var(--accent)]/30 transition-all duration-500"
+                    style={{ width: `${Math.min(100, (sessionStats.tokens / 8192) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-[var(--text-secondary)] opacity-50 whitespace-nowrap">
+                  {realTokens.input > 0
+                    ? `${realTokens.input} in / ${realTokens.output} out`
+                    : `~${sessionStats.tokens} tok`}
+                </span>
+              </div>
+            )}
+
+            <div className="ml-auto flex items-center gap-3 shrink-0">
+              {hasMessages && (
+                <>
+                  <span className="text-[10px] text-[var(--text-secondary)] opacity-50 whitespace-nowrap">
+                    {messages.length - 1} {t('app.messages')}
+                  </span>
+                  <button
+                    onClick={clearMessages}
+                    className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors whitespace-nowrap"
+                  >
+                    {t('app.newChat')}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-
-      {sessionStats.tokens > 0 && (
-        <div className="px-6 pb-1 shrink-0">
-          <div className="max-w-3xl mx-auto">
-            <div className="flex items-center gap-2 px-1">
-              <span className="text-[10px] text-[var(--text-secondary)] opacity-50">
-                {realTokens.input > 0
-                  ? `${realTokens.input} in / ${realTokens.output} out tokens`
-                  : `~${sessionStats.tokens} tokens`}
-              </span>
-              <div className="flex-1 h-1 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-[var(--accent)]/30 transition-all duration-500"
-                  style={{ width: `${Math.min(100, (sessionStats.tokens / 8192) * 100)}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {hasMessages && (
-        <div className="px-6 pb-2 shrink-0">
-          <div className="max-w-3xl mx-auto">
-            <div className="flex items-center gap-3 px-1 py-1.5">
-              <span className="text-[11px] text-[var(--text-secondary)]">
-                {(() => {
-                  const u = getUsage()
-                  return `${u.messages} ${t('app.messages')} total`
-                })()}
-              </span>
-              <span className="text-[var(--border)]">·</span>
-              <ModelSelector label={activeModelLabel} onSelect={recheckProviders} />
-              <span className="text-[var(--border)]">·</span>
-              <button
-                onClick={clearMessages}
-                className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-              >
-                {t('app.newChat')}
-              </button>
-              <span className="text-[var(--border)]">·</span>
-              <span className="text-[11px] text-[var(--text-secondary)]">
-                {messages.length - 1} {t('app.messages')}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-      {sessionStats.messages > 0 && (
-        <div className="px-6 pb-1 shrink-0">
-          <div className="max-w-3xl mx-auto">
-            <div className="text-[10px] text-[var(--text-secondary)] opacity-50 px-1">
-              {sessionStats.label}
-            </div>
-          </div>
-        </div>
-      )}
 
       <SettingsDialog
         open={settingsOpen}

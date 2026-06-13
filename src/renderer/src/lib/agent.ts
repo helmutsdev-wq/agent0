@@ -1,8 +1,10 @@
-import { ChatMessage, StreamChunk, ToolCallPart } from './providers/types'
+import { ChatMessage, StreamChunk } from './providers/types'
 import { getProvider, initProviders, getAllModels, getAvailableModels } from './providers'
 import { executeTool } from './tools'
 import { classifyAndRoute } from './router'
 import { t } from './i18n'
+
+export type Mode = 'build' | 'plan'
 
 export interface AgentConfig {
   provider: string
@@ -10,6 +12,8 @@ export interface AgentConfig {
   systemPrompt: string
   useRouter: boolean
   autoFallback: boolean
+  mode: Mode
+  workspaceRoot: string
 }
 
 let currentConfig: AgentConfig = {
@@ -17,7 +21,17 @@ let currentConfig: AgentConfig = {
   model: 'llama3.2',
   systemPrompt: t('system.prompt'),
   useRouter: false,
-  autoFallback: false
+  autoFallback: false,
+  mode: 'build',
+  workspaceRoot: ''
+}
+
+export function getEffectiveSystemPrompt(): string {
+  let prompt = currentConfig.systemPrompt
+  if (currentConfig.mode === 'plan') {
+    prompt = t('system.planPrefix') + '\n\n' + prompt
+  }
+  return prompt
 }
 
 export function setAgentConfig(config: Partial<AgentConfig>) {
@@ -102,7 +116,7 @@ export async function runAgent(
     }
 
     const allMessages: ChatMessage[] = [
-      { role: 'system', content: currentConfig.systemPrompt },
+      { role: 'system', content: getEffectiveSystemPrompt() },
       ...messages
     ]
 
@@ -129,24 +143,27 @@ export async function runAgent(
       let iteration = 0
       let failed = false
       const sessionToolKeys = new Set<string>()
-      const toolCallBuffer: Array<{ id: string; name: string; args: string }> = []
 
       while (iteration < maxIterations) {
         iteration++
 
+        let iterationText = ''
+        const iterationToolCalls: Array<{ id: string; name: string; args: string }> = []
+
         await provider.chat(allMessages, candidate.modelId, (chunk) => {
           if (chunk.type === 'text') {
+            iterationText += chunk.content
             onChunk(chunk)
           } else if (chunk.type === 'error') {
             globalError = chunk.content
             failed = true
           } else if (chunk.type === 'done') {
-            // no-op, loop handles continuation
+            // no-op
           } else if (chunk.type === 'tool_use') {
             onChunk({ type: 'tool_use', content: '', toolName: chunk.toolName, toolInput: chunk.toolInput })
           } else if (chunk.type === 'tool_call') {
             if (chunk.toolCallId && chunk.toolCallName) {
-              toolCallBuffer.push({
+              iterationToolCalls.push({
                 id: chunk.toolCallId,
                 name: chunk.toolCallName,
                 args: chunk.toolCallArgs || '{}'
@@ -155,29 +172,45 @@ export async function runAgent(
           }
         }, signal)
 
-        if (failed) break
+        if (failed) {
+          iterationToolCalls.length = 0
+          break
+        }
 
-        if (toolCallBuffer.length === 0) break
+        // Text-only response — store and done
+        if (iterationText && iterationToolCalls.length === 0) {
+          allMessages.push({ role: 'assistant', content: iterationText })
+          break
+        }
 
-        // Process tool calls
-        const assistantToolCalls: ToolCallPart[] = []
-        let assistantContent = ''
+        if (iterationToolCalls.length === 0) break
 
-        for (const tc of toolCallBuffer) {
+        // Collect unique tool calls (cross-iteration dedup)
+        const processedCalls: Array<typeof iterationToolCalls[0] & { input: Record<string, unknown> }> = []
+        for (const tc of iterationToolCalls) {
           const key = `${tc.name}:${tc.args}`
           if (sessionToolKeys.has(key)) continue
           sessionToolKeys.add(key)
+          let input: Record<string, unknown> = {}
+          try { input = JSON.parse(tc.args) } catch { /* */ }
+          processedCalls.push({ ...tc, input })
+        }
 
-          assistantToolCalls.push({
+        if (processedCalls.length === 0) break
+
+        // Push one assistant message with all tool_calls
+        allMessages.push({
+          role: 'assistant',
+          content: iterationText || '',
+          tool_calls: processedCalls.map(tc => ({
             id: tc.id,
             type: 'function',
             function: { name: tc.name, arguments: tc.args }
-          })
+          }))
+        })
 
-          let input: Record<string, unknown> = {}
-          try { input = JSON.parse(tc.args) } catch { /* */ }
-
-          const result = await executeTool({ name: tc.name, input })
+        for (const tc of processedCalls) {
+          const result = await executeTool({ name: tc.name, input: tc.input })
 
           onChunk({
             type: 'tool_result',
@@ -187,20 +220,11 @@ export async function runAgent(
           })
 
           allMessages.push({
-            role: 'assistant',
-            content: assistantContent || '',
-            tool_calls: assistantToolCalls
-          })
-          allMessages.push({
             role: 'tool',
             content: result.output || result.error || '(empty)',
             tool_call_id: tc.id
           })
-
-          assistantToolCalls.length = 0
         }
-
-        toolCallBuffer.length = 0
 
         // Send done chunk for UI
         onChunk({ type: 'done', content: '' })
