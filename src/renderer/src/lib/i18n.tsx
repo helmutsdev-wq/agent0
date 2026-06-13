@@ -121,6 +121,11 @@ const en: Dict = {
   'settings.hfRate': 'Free inference API, no credit card needed',
   'settings.unavailable': '(unavailable)',
 
+  // Sessions
+  'session.chats': 'Chats',
+  'session.new': 'New Chat',
+  'session.noChats': 'No conversations yet',
+
   // Local setup
   'local.title': 'Local AI Setup',
   'local.status': 'Status',
@@ -245,6 +250,11 @@ const lv: Dict = {
   'settings.groqRate': 'Bezmaksas līmenis: ierobežots, dāsni bezmaksas kredīti',
   'settings.hfRate': 'Bezmaksas izsecināšanas API, nav nepieciešama kredītkarte',
   'settings.unavailable': '(nav pieejams)',
+
+  // Sessions
+  'session.chats': 'Sarunas',
+  'session.new': 'Jauna Saruna',
+  'session.noChats': 'Vēl nav sarunu',
 
   // Local setup
   'local.title': 'Lokālā AI Iestatīšana',

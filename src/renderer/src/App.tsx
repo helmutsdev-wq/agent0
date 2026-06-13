@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, useCallback, useReducer } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChat, ToolEvent } from './hooks/useChat'
-import { initProviders, getConfigs } from './lib/providers'
-import { setAgentConfig, getAgentConfig, getEffectiveSystemPrompt, Mode } from './lib/agent'
+import { initProviders, getConfigs, getProvider } from './lib/providers'
+import { setAgentConfig, getAgentConfig, Mode } from './lib/agent'
 import { SettingsDialog } from './components/SettingsDialog'
+import { SessionSidebar } from './components/SessionSidebar'
 import { useLanguage } from './lib/i18n'
 
 function ModelSelector({ label, onSelect }: { label: string; onSelect: () => void }) {
@@ -172,7 +173,7 @@ function useTheme(): { theme: string; toggleTheme: () => void } {
 function App() {
   const { t } = useLanguage()
   const { theme, toggleTheme } = useTheme()
-  const { messages, isLoading, error, toolEvents, statusLines, activeModelLabel, sessionStats, realTokens, sendMessage, stopGeneration, clearMessages } = useChat()
+  const { messages, isLoading, error, toolEvents, statusLines, activeModelLabel, sessionStats, realTokens, sendMessage, stopGeneration, clearMessages, sessions, activeSessionId, createSession, switchSession, deleteSession } = useChat()
   const [input, setInput] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -206,6 +207,10 @@ function App() {
     initProviders()
   }, [])
 
+  const currentConfig = getAgentConfig()
+  const currentProvider = getProvider(currentConfig.provider)
+  const currentModelLabel = `${currentProvider?.name || currentConfig.provider} / ${currentConfig.model}`
+
   const handleSend = useCallback(async (text?: string) => {
     const content = text || input.trim()
     if (!content || isLoading) return
@@ -214,7 +219,15 @@ function App() {
   }, [input, isLoading, sendMessage])
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full">
+      <SessionSidebar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onCreate={createSession}
+        onSwitch={switchSession}
+        onDelete={deleteSession}
+      />
+      <div className="flex flex-col flex-1 min-w-0">
       <header className="flex items-center justify-between px-6 py-4 shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-[var(--accent)] flex items-center justify-center text-sm font-bold">
@@ -424,43 +437,29 @@ function App() {
               <span className="text-[10px] text-[var(--text-secondary)] opacity-40">·</span>
             </div>
 
-            {hasMessages && (
-              <>
-                <ModelSelector label={activeModelLabel} onSelect={recheckProviders} />
-                <span className="text-[10px] text-[var(--text-secondary)] opacity-30">·</span>
-              </>
-            )}
+            <ModelSelector label={currentModelLabel} onSelect={() => { recheckProviders(); forceUpdate(); }} />
+            <span className="text-[10px] text-[var(--text-secondary)] opacity-30">·</span>
 
-            {sessionStats.tokens > 0 && (
-              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <div className="flex-1 h-1 rounded-full bg-[var(--bg-tertiary)] overflow-hidden max-w-24">
-                  <div
-                    className="h-full rounded-full bg-[var(--accent)]/30 transition-all duration-500"
-                    style={{ width: `${Math.min(100, (sessionStats.tokens / 8192) * 100)}%` }}
-                  />
-                </div>
-                <span className="text-[10px] text-[var(--text-secondary)] opacity-50 whitespace-nowrap">
-                  {realTokens.input > 0
-                    ? `${realTokens.input} in / ${realTokens.output} out`
-                    : `~${sessionStats.tokens} tok`}
-                </span>
-              </div>
-            )}
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <span className="text-[10px] text-[var(--text-secondary)] opacity-50 whitespace-nowrap font-mono">
+                {realTokens.input > 0 || realTokens.output > 0
+                  ? `${realTokens.input} in · ${realTokens.output} out`
+                  : sessionStats.tokens > 0
+                    ? `~${sessionStats.tokens} tok`
+                    : `0 tok`}
+              </span>
+            </div>
 
             <div className="ml-auto flex items-center gap-3 shrink-0">
-              {hasMessages && (
-                <>
-                  <span className="text-[10px] text-[var(--text-secondary)] opacity-50 whitespace-nowrap">
-                    {messages.length - 1} {t('app.messages')}
-                  </span>
-                  <button
-                    onClick={clearMessages}
-                    className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors whitespace-nowrap"
-                  >
-                    {t('app.newChat')}
-                  </button>
-                </>
-              )}
+              <span className="text-[10px] text-[var(--text-secondary)] opacity-50 whitespace-nowrap">
+                {messages.length - 1} {t('app.messages')}
+              </span>
+              <button
+                onClick={createSession}
+                className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors whitespace-nowrap"
+              >
+                {t('app.newChat')}
+              </button>
             </div>
           </div>
         </div>
@@ -470,7 +469,9 @@ function App() {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         onRecheckProviders={recheckProviders}
+        onConfigChange={() => forceUpdate()}
       />
+    </div>
     </div>
   )
 }

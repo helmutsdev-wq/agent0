@@ -1,56 +1,85 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { ChatMessage } from '../lib/providers/types'
-import { runAgent, setAgentConfig } from '../lib/agent'
+import { runAgent, setAgentConfig, getAgentConfig } from '../lib/agent'
 import { t } from '../lib/i18n'
-import { incrementMessages, incrementTools, addToSession, getSessionStats, clearSession } from '../lib/usage'
-import { getAgentConfig } from '../lib/agent'
+import { incrementMessages, incrementTools, addToSession, getSessionStats } from '../lib/usage'
 import { getProvider } from '../lib/providers'
+import { ChatSession, loadSessions, saveSessions, createSession, generateSessionTitle } from '../lib/sessionStore'
+import { UIMessage, ToolEvent } from '../lib/types'
 
-export interface UIMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  isStreaming?: boolean
-}
+export type { UIMessage, ToolEvent }
 
-export interface ToolEvent {
-  id: string
-  toolName: string
-  toolInput: Record<string, unknown>
-  status: 'running' | 'done'
-  result?: string
-  isError?: boolean
+function updateSessionInList(
+  sessions: ChatSession[],
+  id: string,
+  updater: (s: ChatSession) => ChatSession
+): ChatSession[] {
+  return sessions.map(s => (s.id === id ? { ...updater(s), updatedAt: Date.now() } : s))
 }
 
 export function useChat() {
-  const [messages, setMessages] = useState<UIMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: t('welcome')
-    }
-  ])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
-  const [statusLines, setStatusLines] = useState<string[]>([])
-  const [activeModelLabel, setActiveModelLabel] = useState('')
-  const [sessionStats, setSessionStats] = useState<ReturnType<typeof getSessionStats>>(getSessionStats())
-  const [realTokens, setRealTokens] = useState({ input: 0, output: 0 })
-  const abortRef = useRef<AbortController | null>(null)
-  const messagesRef = useRef(messages)
+  const [sessions, setSessions] = useState<ChatSession[]>(() => loadSessions())
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+    const saved = loadSessions()
+    return saved[0]?.id || ''
+  })
 
-  useEffect(() => {
-    messagesRef.current = messages
-  }, [messages])
+  const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0]
+
+  const [sessionStats, setSessionStats] = useState<ReturnType<typeof getSessionStats>>(getSessionStats())
+  const abortRef = useRef<AbortController | null>(null)
+  const sessionsRef = useRef(sessions)
+  const activeIdRef = useRef(activeSessionId)
+
+  useEffect(() => { sessionsRef.current = sessions }, [sessions])
+  useEffect(() => { activeIdRef.current = activeSessionId }, [activeSessionId])
+
+  const persist = useCallback((updated: ChatSession[]) => {
+    saveSessions(updated)
+    setSessions(updated)
+  }, [])
+
+  const createNewSession = useCallback(() => {
+    const session = createSession()
+    const updated = [...sessionsRef.current, session]
+    persist(updated)
+    setActiveSessionId(session.id)
+  }, [persist])
+
+  const switchSession = useCallback((id: string) => {
+    if (sessionsRef.current.some(s => s.id === id)) {
+      setActiveSessionId(id)
+    }
+  }, [])
+
+  const deleteSession = useCallback((id: string) => {
+    const current = sessionsRef.current
+    const updated = current.filter(s => s.id !== id)
+    if (updated.length === 0) {
+      const fresh = createSession()
+      persist([fresh])
+      setActiveSessionId(fresh.id)
+    } else {
+      persist(updated)
+      if (activeIdRef.current === id) {
+        setActiveSessionId(updated[0].id)
+      }
+    }
+  }, [persist])
+
+  const setSessionTitle = useCallback((id: string, title: string) => {
+    setSessions(prev => {
+      const updated = updateSessionInList(prev, id, s => ({ ...s, title }))
+      saveSessions(updated)
+      return updated
+    })
+  }, [])
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isLoading) return
+    const session = sessionsRef.current.find(s => s.id === activeIdRef.current)
+    if (!session || !content.trim() || session.isLoading) return
 
-    setError(null)
-    setToolEvents([])
-    setStatusLines([])
-    setRealTokens({ input: 0, output: 0 })
+    const sid = activeIdRef.current
 
     const userMsg: UIMessage = {
       id: `${Date.now()}-user`,
@@ -65,16 +94,28 @@ export function useChat() {
       isStreaming: true
     }
 
-    const currentMessages = messagesRef.current
+    const prevMessages = session.messages
 
-    setMessages(prev => [...prev, userMsg, assistantMsg])
-    setIsLoading(true)
+    setSessions(prev => {
+      const updated = updateSessionInList(prev, sid, s => ({
+        ...s,
+        messages: [...s.messages, userMsg, assistantMsg],
+        isLoading: true,
+        error: null,
+        toolEvents: [],
+        statusLines: [],
+        realTokens: { input: 0, output: 0 },
+        title: s.title === t('session.new') ? generateSessionTitle([...prevMessages, userMsg]) : s.title
+      }))
+      saveSessions(updated)
+      return updated
+    })
 
     const abortController = new AbortController()
     abortRef.current = abortController
 
     const chatMessages: ChatMessage[] = [
-      ...currentMessages
+      ...prevMessages
         .filter(m => m.id !== 'welcome')
         .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       { role: 'user' as const, content: content.trim() }
@@ -90,42 +131,70 @@ export function useChat() {
         (chunk) => {
           if (chunk.type === 'text') {
             fullResponse += chunk.content
-            setMessages(prev => {
-              const updated = [...prev]
-              const last = updated[updated.length - 1]
-              if (last?.isStreaming) {
-                updated[updated.length - 1] = { ...last, content: fullResponse }
-              }
+            setSessions(prev => {
+              const updated = updateSessionInList(prev, sid, s => {
+                const msgs = [...s.messages]
+                const last = msgs[msgs.length - 1]
+                if (last?.isStreaming) {
+                  msgs[msgs.length - 1] = { ...last, content: fullResponse }
+                }
+                return { ...s, messages: msgs }
+              })
               return updated
             })
           } else if (chunk.type === 'info') {
-            setStatusLines(prev => [...prev, chunk.content])
+            setSessions(prev => {
+              const updated = updateSessionInList(prev, sid, s => ({
+                ...s,
+                statusLines: [...s.statusLines, chunk.content]
+              }))
+              return updated
+            })
           } else if (chunk.type === 'usage') {
-            setRealTokens({ input: chunk.inputTokens || 0, output: chunk.outputTokens || 0 })
+            setSessions(prev => {
+              const updated = updateSessionInList(prev, sid, s => ({
+                ...s,
+                realTokens: { input: chunk.inputTokens || 0, output: chunk.outputTokens || 0 }
+              }))
+              return updated
+            })
           } else if (chunk.type === 'error') {
-            setError(chunk.content)
+            setSessions(prev => {
+              const updated = updateSessionInList(prev, sid, s => ({ ...s, error: chunk.content }))
+              return updated
+            })
           } else if (chunk.type === 'tool_use') {
             toolCount++
             incrementTools()
-            setToolEvents(prev => [...prev, {
+            const evt: ToolEvent = {
               id: `${Date.now()}-${chunk.toolName}`,
               toolName: chunk.toolName || 'tool',
               toolInput: chunk.toolInput || {},
               status: 'running'
-            }])
+            }
+            setSessions(prev => {
+              const updated = updateSessionInList(prev, sid, s => ({
+                ...s,
+                toolEvents: [...s.toolEvents, evt]
+              }))
+              return updated
+            })
           } else if (chunk.type === 'tool_result') {
-            setToolEvents(prev => {
-              const updated = [...prev]
-              const running = updated.filter(t => t.status === 'running')
-              if (running.length > 0) {
-                const idx = updated.indexOf(running[0])
-                updated[idx] = {
-                  ...running[0],
-                  status: 'done',
-                  result: chunk.toolResult || '',
-                  isError: !chunk.toolResult || chunk.toolResult.startsWith('Error') || chunk.toolResult.includes('failed')
+            setSessions(prev => {
+              const updated = updateSessionInList(prev, sid, s => {
+                const events = [...s.toolEvents]
+                const running = events.filter(t => t.status === 'running')
+                if (running.length > 0) {
+                  const idx = events.indexOf(running[0])
+                  events[idx] = {
+                    ...running[0],
+                    status: 'done',
+                    result: chunk.toolResult || '',
+                    isError: !chunk.toolResult || chunk.toolResult.startsWith('Error') || chunk.toolResult.includes('failed')
+                  }
                 }
-              }
+                return { ...s, toolEvents: events }
+              })
               return updated
             })
           }
@@ -134,62 +203,75 @@ export function useChat() {
       )
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        setError((err as Error).message)
+        setSessions(prev => {
+          const updated = updateSessionInList(prev, sid, s => ({ ...s, error: (err as Error).message }))
+          return updated
+        })
       }
     } finally {
       incrementMessages(2)
-      setIsLoading(false)
-      setMessages(prev => {
-        const updated = [...prev]
-        const last = updated[updated.length - 1]
-        if (last?.isStreaming) {
-          updated[updated.length - 1] = { ...last, isStreaming: false }
-        }
+      setSessions(prev => {
+        const updated = updateSessionInList(prev, sid, s => {
+          const msgs = [...s.messages]
+          const last = msgs[msgs.length - 1]
+          if (last?.isStreaming) {
+            msgs[msgs.length - 1] = { ...last, isStreaming: false }
+          }
+          const cfg = getAgentConfig()
+          const p = getProvider(cfg.provider)
+          const m = p?.models.find(m => m.id === cfg.model)
+          const label = `${p?.name || cfg.provider} / ${m?.name || cfg.model}`
+          return { ...s, messages: msgs, isLoading: false, activeModelLabel: label }
+        })
+        saveSessions(updated)
         return updated
       })
       abortRef.current = null
       addToSession(inputChars, fullResponse.length, toolCount)
       setSessionStats(getSessionStats())
-      const cfg = getAgentConfig()
-      const p = getProvider(cfg.provider)
-      const m = p?.models.find(m => m.id === cfg.model)
-      setActiveModelLabel(`${p?.name || cfg.provider} / ${m?.name || cfg.model}`)
     }
-  }, [isLoading])
+  }, [])
 
   const stopGeneration = useCallback(() => {
     abortRef.current?.abort()
-    setIsLoading(false)
-    setMessages(prev => {
-      const updated = [...prev]
-      const last = updated[updated.length - 1]
-      if (last?.isStreaming) {
-        updated[updated.length - 1] = { ...last, isStreaming: false }
-      }
+    const sid = activeIdRef.current
+    setSessions(prev => {
+      const updated = updateSessionInList(prev, sid, s => {
+        const msgs = [...s.messages]
+        const last = msgs[msgs.length - 1]
+        if (last?.isStreaming) {
+          msgs[msgs.length - 1] = { ...last, isStreaming: false }
+        }
+        return { ...s, messages: msgs, isLoading: false }
+      })
+      saveSessions(updated)
       return updated
     })
   }, [])
 
   const clearMessages = useCallback(() => {
-    setMessages([
-      {
-        id: 'welcome',
-        role: 'assistant',
-        content: t('welcome')
-      }
-    ])
-    setError(null)
-    setToolEvents([])
-    setStatusLines([])
-    clearSession()
-    setSessionStats(getSessionStats())
-  }, [])
+    createNewSession()
+  }, [createNewSession])
 
   const updateConfig = useCallback((config: Parameters<typeof setAgentConfig>[0]) => {
     setAgentConfig(config)
   }, [])
 
+  const messages = activeSession?.messages || []
+  const isLoading = activeSession?.isLoading || false
+  const error = activeSession?.error || null
+  const toolEvents = activeSession?.toolEvents || []
+  const statusLines = activeSession?.statusLines || []
+  const activeModelLabel = activeSession?.activeModelLabel || ''
+  const realTokens = activeSession?.realTokens || { input: 0, output: 0 }
+
   return {
+    sessions,
+    activeSessionId,
+    createSession: createNewSession,
+    switchSession,
+    deleteSession,
+    setSessionTitle,
     messages,
     isLoading,
     error,

@@ -34,11 +34,13 @@ const PROVIDER_NAMES: Record<string, { label: string; color: string; docsUrl: st
 export function SettingsDialog({
   open,
   onOpenChange,
-  onRecheckProviders
+  onRecheckProviders,
+  onConfigChange
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onRecheckProviders: () => void
+  onConfigChange?: () => void
 }) {
   const { t, lang, setLang } = useLanguage()
   const [, forceUpdate] = React.useState(0)
@@ -74,6 +76,7 @@ export function SettingsDialog({
     }
     onRecheckProviders()
     forceUpdate(n => n + 1)
+    onConfigChange?.()
   }
 
   const LANGUAGES: { value: Lang; label: string }[] = [
@@ -158,6 +161,7 @@ export function SettingsDialog({
                         onChange={e => {
                           setAgentConfig({ model: e.target.value })
                           forceUpdate(n => n + 1)
+                          onConfigChange?.()
                         }}
                         className="w-full mt-1 appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg-tertiary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
                       >
