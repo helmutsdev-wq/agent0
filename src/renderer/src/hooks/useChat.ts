@@ -27,6 +27,8 @@ function enrichWithAttachments(msg: UIMessage): string {
 
 export type { UIMessage, ToolEvent }
 
+const ACTIVE_SESSION_KEY = 'agent0_active_session'
+
 function updateSessionInList(
   sessions: ChatSession[],
   id: string,
@@ -39,6 +41,8 @@ export function useChat() {
   const [sessions, setSessions] = useState<ChatSession[]>(() => loadSessions())
   const [activeSessionId, setActiveSessionId] = useState<string>(() => {
     const saved = loadSessions()
+    const lastId = localStorage.getItem(ACTIVE_SESSION_KEY)
+    if (lastId && saved.some(s => s.id === lastId)) return lastId
     return saved[0]?.id || ''
   })
 
@@ -51,6 +55,7 @@ export function useChat() {
 
   useEffect(() => { sessionsRef.current = sessions }, [sessions])
   useEffect(() => { activeIdRef.current = activeSessionId }, [activeSessionId])
+  useEffect(() => { try { localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId) } catch {} }, [activeSessionId])
 
   const persist = useCallback((updated: ChatSession[]) => {
     saveSessions(updated)
@@ -239,7 +244,13 @@ export function useChat() {
           const msgs = [...s.messages]
           const last = msgs[msgs.length - 1]
           if (last?.isStreaming) {
-            msgs[msgs.length - 1] = { ...last, isStreaming: false }
+            if (!last.content && toolCount > 0) {
+              msgs.pop()
+            } else if (!last.content) {
+              msgs[msgs.length - 1] = { ...last, isStreaming: false, content: '—' }
+            } else {
+              msgs[msgs.length - 1] = { ...last, isStreaming: false }
+            }
           }
           const cfg = getAgentConfig()
           const p = getProvider(cfg.provider)

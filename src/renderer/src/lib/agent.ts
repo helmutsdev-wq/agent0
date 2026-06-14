@@ -17,6 +17,8 @@ export interface AgentConfig {
   workspaceRoot: string
 }
 
+const AGENT_CONFIG_KEY = 'agent0_agent_config'
+
 let currentConfig: AgentConfig = {
   provider: 'ollama',
   model: 'llama3.2',
@@ -27,16 +29,36 @@ let currentConfig: AgentConfig = {
   workspaceRoot: ''
 }
 
+export function setAgentConfig(config: Partial<AgentConfig>) {
+  currentConfig = { ...currentConfig, ...config }
+  try {
+    localStorage.setItem(AGENT_CONFIG_KEY, JSON.stringify({
+      provider: currentConfig.provider,
+      model: currentConfig.model,
+      mode: currentConfig.mode,
+      useRouter: currentConfig.useRouter,
+      autoFallback: currentConfig.autoFallback,
+      workspaceRoot: currentConfig.workspaceRoot
+    }))
+  } catch { /* localStorage unavailable */ }
+}
+
+export function restoreAgentConfig() {
+  try {
+    const saved = localStorage.getItem(AGENT_CONFIG_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      currentConfig = { ...currentConfig, ...parsed }
+    }
+  } catch { /* ignore corrupt data */ }
+}
+
 export function getEffectiveSystemPrompt(): string {
   let prompt = currentConfig.systemPrompt
   if (currentConfig.mode === 'plan') {
     prompt = t('system.planPrefix') + '\n\n' + prompt
   }
   return prompt
-}
-
-export function setAgentConfig(config: Partial<AgentConfig>) {
-  currentConfig = { ...currentConfig, ...config }
 }
 
 export function getAgentConfig(): AgentConfig {
@@ -184,6 +206,12 @@ export async function runAgent(
         }, signal)
 
         if (failed) {
+          // If we already processed tool calls successfully, don't propagate the error
+          if (iterationToolCalls.length > 0 || allMessages.some(m => m.role === 'tool' && m.content)) {
+            failed = false
+            globalError = ''
+            break
+          }
           iterationToolCalls.length = 0
           break
         }
@@ -194,7 +222,12 @@ export async function runAgent(
           break
         }
 
-        if (iterationToolCalls.length === 0) break
+        if (iterationToolCalls.length === 0) {
+          if (!iterationText && !globalError) {
+            onChunk({ type: 'info', content: t('agent.noOutput') })
+          }
+          break
+        }
 
         // Collect unique tool calls (cross-iteration dedup)
         const processedCalls: Array<typeof iterationToolCalls[0] & { input: Record<string, unknown> }> = []
@@ -248,8 +281,7 @@ export async function runAgent(
     }
 
     if (globalError) {
-      const hint = (!currentConfig.useRouter && !currentConfig.autoFallback) ? '\n\n' + t('agent.trySwitch') : ''
-      onChunk({ type: 'error', content: globalError + hint })
+      onChunk({ type: 'error', content: globalError })
     }
   } catch (err) {
     if ((err as Error).name !== 'AbortError') {

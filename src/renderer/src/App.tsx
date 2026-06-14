@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChat, ToolEvent } from './hooks/useChat'
 import { initProviders, getConfigs, getProvider } from './lib/providers'
-import { setAgentConfig, getAgentConfig, Mode } from './lib/agent'
+import { setAgentConfig, getAgentConfig, restoreAgentConfig, Mode } from './lib/agent'
 import { SettingsDialog } from './components/SettingsDialog'
 import { SessionSidebar } from './components/SessionSidebar'
 import { useLanguage } from './lib/i18n'
@@ -230,26 +230,24 @@ function App() {
   const { theme, toggleTheme } = useTheme()
   const { messages, isLoading, error, toolEvents, statusLines, activeModelLabel, sessionStats, realTokens, sendMessage, stopGeneration, clearMessages, sessions, activeSessionId, createSession, switchSession, deleteSession } = useChat()
   const [input, setInput] = useState('')
+  const [pendingFiles, setPendingFiles] = useState<AttachedFile[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<string | undefined>()
-  const [showFirstLaunchBanner, setShowFirstLaunchBanner] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [zoom, setZoom] = useState(() => {
+    try { return parseInt(localStorage.getItem('agent0_zoom') || '100') } catch { return 100 }
+  })
   const [showScrollBottom, setShowScrollBottom] = useState(false)
+  const [sentHistory, setSentHistory] = useState<string[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [historyDraft, setHistoryDraft] = useState('')
 
-  const [pendingFiles, setPendingFiles] = useState<AttachedFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragCounterRef = useRef(0)
 
   const hasMessages = messages.length > 1
   const forceUpdate = useReducer(n => n + 1, 0)[1]
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [zoom, setZoom] = useState(() => {
-    const saved = localStorage.getItem('agent0_zoom')
-    return saved ? parseInt(saved) : 100
-  })
 
   const adjustZoom = useCallback((delta: number) => {
     setZoom(prev => {
@@ -269,22 +267,28 @@ function App() {
   ]
 
   useEffect(() => {
-    initProviders().then(() => {
+    restoreAgentConfig()
+    let cancelled = false
+    initProviders().then(async () => {
+      if (cancelled) return
       const configs = getConfigs()
       const hasAnyAvailable = configs.some(c => c.models.some(m => m.available))
       const hasBeenPrompted = localStorage.getItem('agent0_first_launch_prompted')
       if (!hasAnyAvailable && !hasBeenPrompted) {
         setShowFirstLaunchBanner(true)
       }
-      // Init memory + start evolution trigger after providers are ready
-      const ws = getAgentConfig().workspaceRoot
-      if (ws) {
+      // Auto-set workspace root if not configured
+      let ws = getAgentConfig().workspaceRoot
+      if (!ws) {
+        ws = await window.electronAPI.workspace.getDefault()
+        setAgentConfig({ workspaceRoot: ws })
         window.electronAPI.workspace.setRoot(ws)
-        initMemoryFiles(ws)
       }
+      initMemoryFiles(ws)
       startEvolutionTrigger(() => sessionsRef.current)
+      forceUpdate()
     })
-    return () => { stopEvolutionTrigger() }
+    return () => { cancelled = true; stopEvolutionTrigger() }
   }, [])
 
   useEffect(() => {
@@ -405,6 +409,11 @@ function App() {
     const content = text || input.trim()
     if ((!content && pendingFiles.length === 0) || isLoading) return
     const files = pendingFiles.length > 0 ? [...pendingFiles] : undefined
+    if (content) {
+      setSentHistory(prev => [...prev, content])
+    }
+    setHistoryIndex(-1)
+    setHistoryDraft('')
     setInput('')
     setPendingFiles([])
     await sendMessage(content, files)
@@ -603,7 +612,7 @@ function App() {
                         <div>
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] text-[var(--text-secondary)] opacity-50">
-                              {activeModelLabel}
+                              {currentModelLabel}
                             </span>
                             <CopyButton text={msg.content} />
                           </div>
@@ -612,7 +621,7 @@ function App() {
                               remarkPlugins={[remarkGfm]}
                               components={markdownComponents}
                             >
-                              {msg.content || (msg.isStreaming ? '' : `_${t('app.thinking')}_`)}
+                              {msg.content || (msg.isStreaming ? '' : '')}
                             </ReactMarkdown>
                             {msg.isStreaming && !msg.content && (
                               <div className="flex gap-1.5 py-1">
@@ -720,6 +729,18 @@ function App() {
 
           <div className="px-6 pb-3 pt-2 shrink-0">
             <div className="max-w-3xl mx-auto space-y-2">
+              {showScrollBottom && (
+                <div className="flex justify-center -mb-2">
+                  <button
+                    onClick={scrollToBottom}
+                    className="w-14 h-6 rounded-full bg-[var(--bg-tertiary)] opacity-80 hover:opacity-100 border border-[var(--border)] text-[var(--text-secondary)] shadow-lg flex items-center justify-center hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-200"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                </div>
+              )}
               {pendingFiles.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {pendingFiles.map(f => (
@@ -761,6 +782,34 @@ function App() {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault()
                         handleSend()
+                        return
+                      }
+                      if (e.key === 'ArrowUp' && sentHistory.length > 0) {
+                        e.preventDefault()
+                        if (historyIndex === -1) {
+                          setHistoryDraft(input)
+                          setHistoryIndex(sentHistory.length - 1)
+                          setInput(sentHistory[sentHistory.length - 1])
+                        } else if (historyIndex > 0) {
+                          const newIdx = historyIndex - 1
+                          setHistoryIndex(newIdx)
+                          setInput(sentHistory[newIdx])
+                        }
+                        return
+                      }
+                      if (e.key === 'ArrowDown') {
+                        if (historyIndex !== -1) {
+                          e.preventDefault()
+                          if (historyIndex < sentHistory.length - 1) {
+                            const newIdx = historyIndex + 1
+                            setHistoryIndex(newIdx)
+                            setInput(sentHistory[newIdx])
+                          } else {
+                            setHistoryIndex(-1)
+                            setInput(historyDraft)
+                          }
+                        }
+                        return
                       }
                     }}
                     onPaste={async e => {
@@ -860,6 +909,10 @@ function App() {
                         ? `~${sessionStats.tokens} tokens`
                         : `0 tokens`}
                   </span>
+                  <span className="text-[10px] text-[var(--text-secondary)] opacity-30">·</span>
+                  <span className="text-[10px] text-[var(--text-secondary)] opacity-50 truncate max-w-[200px]" title={getAgentConfig().workspaceRoot}>
+                    {getAgentConfig().workspaceRoot || t('settings.workspaceRoot')}
+                  </span>
                 </div>
                 <div className="ml-auto flex items-center gap-3 shrink-0">
                   <span className="text-[10px] text-[var(--text-secondary)] opacity-50 whitespace-nowrap">
@@ -877,18 +930,6 @@ function App() {
           </div>
           
         </div>
-{showScrollBottom && (
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-28 z-40 mb-2">
-              <button
-                onClick={scrollToBottom}
-                className="w-14 h-6 rounded-full bg-[var(--bg-tertiary)] opacity-80 hocer:opacity-100 border border-[var(--border)] text-[var(--text-secondary)] shadow-lg flex items-center justify-center hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-200"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-            </div>
-          )}
         <SettingsDialog
           open={settingsOpen}
           onOpenChange={(open) => { setSettingsOpen(open); if (!open) setSettingsTab(undefined) }}

@@ -9,10 +9,7 @@ export function memPath(workspaceRoot: string, name: string): string {
 }
 
 async function ensureDir(path: string): Promise<void> {
-  await window.electronAPI.dir.list(path).catch(async () => {
-    await window.electronAPI.file.write(path + '\\.mkdir', '')
-    await window.electronAPI.file.write(path + '\\.mkdir', '').catch(() => {})
-  })
+  await window.electronAPI.dir.create(path).catch(() => {})
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -39,9 +36,7 @@ async function writeFile(path: string, content: string): Promise<ToolResult> {
 export async function initMemoryFiles(workspaceRoot: string): Promise<void> {
   if (!workspaceRoot) return
   const dir = memoryDir(workspaceRoot)
-  try { await window.electronAPI.dir.list(dir) } catch {
-    await writeFile(dir + '\\.mkdir', '')
-  }
+  await ensureDir(dir)
   const memFile = memPath(workspaceRoot, 'MEMORY.md')
   if (!(await fileExists(memFile))) {
     await writeFile(memFile, '# Long-term Memory\n\nKey facts, preferences, and decisions remembered across conversations.\n')
@@ -51,9 +46,7 @@ export async function initMemoryFiles(workspaceRoot: string): Promise<void> {
     await writeFile(daily, `# Daily Memory — ${new Date().toLocaleDateString('en-CA')}\n\n`)
   }
   const evoDir = memoryDir(workspaceRoot) + '\\evolution'
-  try { await window.electronAPI.dir.list(evoDir) } catch {
-    await writeFile(evoDir + '\\.mkdir', '')
-  }
+  await ensureDir(evoDir)
 }
 
 function todayFile(): string {

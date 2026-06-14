@@ -14,7 +14,8 @@ const api = {
     exec: (command: string) => ipcRenderer.invoke('bash:exec', command)
   },
   dir: {
-    list: (dirPath: string) => ipcRenderer.invoke('dir:list', dirPath)
+    list: (dirPath: string) => ipcRenderer.invoke('dir:list', dirPath),
+    create: (dirPath: string) => ipcRenderer.invoke('dir:create', dirPath)
   },
   web: {
     fetch: (url: string) => ipcRenderer.invoke('web:fetch', url),
@@ -27,7 +28,8 @@ const api = {
   },
   workspace: {
     setRoot: (root: string) => ipcRenderer.invoke('workspace:set-root', root),
-    getRoot: () => ipcRenderer.invoke('workspace:get-root')
+    getRoot: () => ipcRenderer.invoke('workspace:get-root'),
+    getDefault: () => ipcRenderer.invoke('workspace:get-default')
   },
   documents: {
     readPdf: (path: string) => ipcRenderer.invoke('documents:read-pdf', path),

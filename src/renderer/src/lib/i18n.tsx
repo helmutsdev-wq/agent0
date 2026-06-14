@@ -173,6 +173,10 @@ const en: Dict = {
   'local.firstLaunchDesc': 'Download Llama 3.2 (2 GB) — a free, fast, local AI model. No internet needed after download.',
   'local.firstLaunchDownload': 'Download',
   'local.firstLaunchSkip': 'Skip',
+  'local.addModel': 'Add Model',
+  'local.addModelPlaceholder': 'e.g. llama3.2:3b',
+  'local.addModelHint': 'Manually add a model name already pulled in Ollama.',
+  'local.modelAdded': 'Added',
 
   // Tool events
   'tool.running': 'Running',
@@ -195,6 +199,7 @@ const en: Dict = {
   'agent.routing': 'Routing to **{{task}}**: {{provider}}/{{model}}',
   'agent.providerNotFound': 'Provider "{{provider}}" not found. Check your Settings.',
   'agent.modelFailed': 'Model "{{model}}" is not available. Go to Settings > Models and pick a different model or enable Smart Routing.',
+  'agent.noOutput': 'Model did not produce a response. Try using a different model.',
   'agent.error': 'Agent error: {{message}}',
 
   // Memory
@@ -340,6 +345,10 @@ const lv: Dict = {
   'local.firstLaunchDesc': 'Lejupielādē Llama 3.2 (2 GB) — bezmaksas, ātru, lokālu AI modeli. Pēc lejupielādes internets nav vajadzīgs.',
   'local.firstLaunchDownload': 'Lejupielādēt',
   'local.firstLaunchSkip': 'Izlaist',
+  'local.addModel': 'Pievienot modeli',
+  'local.addModelPlaceholder': 'piem. llama3.2:3b',
+  'local.addModelHint': 'Manuāli pievieno modeli, kas jau ir lejupielādēts Ollama.',
+  'local.modelAdded': 'Pievienots',
 
   // Tool events
   'tool.running': 'Izpilda',
@@ -362,6 +371,7 @@ const lv: Dict = {
   'agent.routing': 'Maršrutē uz **{{task}}**: {{provider}}/{{model}}',
   'agent.providerNotFound': 'Nodrošinātājs "{{provider}}" nav atrasts. Pārbaudi Iestatījumus.',
   'agent.modelFailed': 'Modelis "{{model}}" nav pieejams. Dodies uz Iestatījumi > Modeļi un izvēlies citu modeli vai ieslēdz Viedo maršrutēšanu.',
+  'agent.noOutput': 'Modelis nesniedza atbildi. Pamēģini izmantot citu modeli.',
   'agent.error': 'Aģenta kļūda: {{message}}',
 
   // Memory

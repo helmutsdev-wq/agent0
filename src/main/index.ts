@@ -1,10 +1,10 @@
 import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent, Menu, dialog } from 'electron'
 import { join, resolve, relative, normalize, isAbsolute, extname } from 'path'
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, readFile } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, readFile } from 'fs'
 import { spawnSync, spawn, execFile, ChildProcess } from 'child_process'
 import https from 'https'
 import http from 'http'
-import { tmpdir } from 'os'
+import { tmpdir, homedir } from 'os'
 import { PDFParse } from 'pdf-parse'
 import mammoth from 'mammoth'
 
@@ -126,6 +126,8 @@ ipcMain.handle('workspace:set-root', (_event, root: string) => {
 
 ipcMain.handle('workspace:get-root', () => workspaceRoot)
 
+ipcMain.handle('workspace:get-default', () => homedir())
+
 // ─── File System IPC ───────────────────────────────────────────────────
 
 ipcMain.handle('file:read', (_event, filePath: string) => {
@@ -175,6 +177,15 @@ ipcMain.handle('dir:list', (_event, dirPath: string) => {
       }
     })
     return { items }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+ipcMain.handle('dir:create', (_event, dirPath: string) => {
+  try {
+    mkdirSync(dirPath, { recursive: true })
+    return { success: true }
   } catch (e) {
     return { error: (e as Error).message }
   }
@@ -471,10 +482,13 @@ ipcMain.handle('ollama:download-installer', async (event) => {
         downloaded += chunk.length
         if (total > 0) {
           const percent = Math.round((downloaded / total) * 100)
+          const mb = Math.round(downloaded / 1024 / 1024 * 10) / 10
+          const totalMB = Math.round(total / 1024 / 1024 * 10) / 10
           sendProgress(event, {
             stage: 'downloading',
             percent,
-            message: `Downloading installer... ${percent}% (${Math.round(downloaded / 1024 / 1024 * 10) / 10} MB)`
+            message: `Downloading installer... ${percent}% (${mb} MB)`,
+            rawLine: `downloading OllamaSetup.exe... ${percent}%  ${mb} MB/${totalMB} MB`
           })
         }
       })
@@ -482,16 +496,16 @@ ipcMain.handle('ollama:download-installer', async (event) => {
       response.pipe(file)
       file.on('finish', () => {
         file.close()
-        sendProgress(event, { stage: 'downloaded', percent: 100, message: 'Download complete' })
+        sendProgress(event, { stage: 'downloaded', percent: 100, message: 'Download complete', rawLine: 'Download complete!' })
         resolve({ success: true, path: dest, platform })
       })
     })
 
-    request.on('error', (err) => {
-      activeRequest = null
-      sendProgress(event, { stage: 'error', percent: 0, message: `Download failed: ${err.message}` })
-      resolve({ success: false, error: err.message })
-    })
+      request.on('error', (err) => {
+        activeRequest = null
+        sendProgress(event, { stage: 'error', percent: 0, message: `Download failed: ${err.message}`, rawLine: `error: ${err.message}` })
+        resolve({ success: false, error: err.message })
+      })
 
     request.end()
   })
@@ -522,7 +536,7 @@ ipcMain.handle('ollama:install-ollama', async (event, installerPath: string) => 
       const progressTimer = setInterval(() => {
         const elapsed = Date.now() - startTime
         const pct = Math.min(Math.round((elapsed / 300000) * 95), 95)
-        sendProgress(event, { stage: 'installing', percent: pct, message: `Installing Ollama... ${Math.round(elapsed / 1000)}s` })
+        sendProgress(event, { stage: 'installing', percent: pct, message: `Installing Ollama... ${Math.round(elapsed / 1000)}s`, rawLine: `Installing Ollama... ${Math.round(elapsed / 1000)}s (${pct}%)` })
       }, 1000)
 
       const proc = execFile(installerPath, ['/S'])
@@ -545,7 +559,16 @@ ipcMain.handle('ollama:install-ollama', async (event, installerPath: string) => 
         resolve({ success: false, error: err.message })
       })
       proc.stdout?.on('data', (data) => {
-        sendProgress(event, { stage: 'installing', percent: 60, message: data.toString().trim() })
+        const msg = data.toString().trim()
+        if (msg) {
+          sendProgress(event, { stage: 'installing', percent: 60, message: msg, rawLine: msg })
+        }
+      })
+      proc.stderr?.on('data', (data) => {
+        const msg = data.toString().trim()
+        if (msg) {
+          sendProgress(event, { stage: 'installing', percent: 60, message: msg, rawLine: msg })
+        }
       })
     } else {
       resolve({ success: false, error: 'Unsupported platform' })
@@ -562,26 +585,55 @@ ipcMain.handle('ollama:pull-model', async (event, modelName: string) => {
     const proc = spawn(bin, ['pull', modelName], { shell: true })
     activeProcess = proc
 
+    const layerTimers: Record<string, { start: number; lastCompleted: number }> = {}
     proc.stdout?.on('data', (data: Buffer) => {
       const lines = data.toString().trim().split('\n')
       for (const line of lines) {
         try {
           const json = JSON.parse(line)
           if (json.status) {
+            let rawLine = json.status
             if (json.total && json.completed !== undefined) {
               const percent = Math.round((json.completed / json.total) * 100)
               const name = json.digest ? json.digest.substring(7, 19) : ''
-              sendProgress(event, {
-                stage: 'pulling',
-                percent,
-                message: name ? `Downloading layer ${name}... ${percent}%` : json.status
-              })
+              const digest = json.digest || ''
+              if (digest && !layerTimers[digest]) {
+                layerTimers[digest] = { start: Date.now(), lastCompleted: 0 }
+              }
+              const timer = digest ? layerTimers[digest] : null
+              if (timer) {
+                const elapsed = (Date.now() - timer.start) / 1000
+                const deltaBytes = json.completed - timer.lastCompleted
+                const speedMBs = deltaBytes > 0 && elapsed > 0 ? Math.round((deltaBytes / 1024 / 1024) / elapsed) : 0
+                timer.lastCompleted = json.completed
+                const remaining = json.total - json.completed
+                const eta = speedMBs > 0 ? Math.round(remaining / 1024 / 1024 / speedMBs) : 0
+                const compMB = (json.completed / 1024 / 1024).toFixed(1)
+                const totalMB = (json.total / 1024 / 1024).toFixed(1)
+                rawLine = `pulling ${name}... ${percent}%  ${compMB} MB/${totalMB} MB  ${speedMBs} MB/s  ${eta}s`
+                sendProgress(event, {
+                  stage: 'pulling',
+                  percent,
+                  message: `Downloading layer ${name}... ${percent}%`,
+                  rawLine
+                })
+              } else {
+                rawLine = `pulling ${name}... ${percent}%`
+                sendProgress(event, {
+                  stage: 'pulling',
+                  percent,
+                  message: `Downloading layer ${name}... ${percent}%`,
+                  rawLine
+                })
+              }
             } else {
-              sendProgress(event, { stage: 'pulling', percent: 90, message: json.status })
+              rawLine = json.status
+              sendProgress(event, { stage: 'pulling', percent: 90, message: json.status, rawLine })
             }
           }
         } catch {
-          sendProgress(event, { stage: 'pulling', percent: 85, message: line })
+          const rawLine = line
+          sendProgress(event, { stage: 'pulling', percent: 85, message: line, rawLine })
         }
       }
     })
@@ -589,24 +641,24 @@ ipcMain.handle('ollama:pull-model', async (event, modelName: string) => {
     proc.stderr?.on('data', (data: Buffer) => {
       const msg = data.toString().trim()
       if (msg) {
-        sendProgress(event, { stage: 'pulling', percent: 80, message: msg })
+        sendProgress(event, { stage: 'pulling', percent: 80, message: msg, rawLine: msg })
       }
     })
 
     proc.on('close', (code) => {
       activeProcess = null
       if (code === 0) {
-        sendProgress(event, { stage: 'ready', percent: 100, message: `${modelName} is ready!` })
+        sendProgress(event, { stage: 'ready', percent: 100, message: `${modelName} is ready!`, rawLine: `success: ${modelName} is ready!` })
         resolve({ success: true })
       } else {
-        sendProgress(event, { stage: 'error', percent: 0, message: `Failed to pull ${modelName}` })
+        sendProgress(event, { stage: 'error', percent: 0, message: `Failed to pull ${modelName}`, rawLine: `error: failed to pull ${modelName} (exit code ${code})` })
         resolve({ success: false, error: `Process exited with code ${code}` })
       }
     })
 
     proc.on('error', (err) => {
       activeProcess = null
-      sendProgress(event, { stage: 'error', percent: 0, message: err.message })
+      sendProgress(event, { stage: 'error', percent: 0, message: err.message, rawLine: `error: ${err.message}` })
       resolve({ success: false, error: err.message })
     })
   })

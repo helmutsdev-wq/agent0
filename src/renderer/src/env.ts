@@ -16,6 +16,7 @@ declare global {
       }
       dir: {
         list: (dirPath: string) => Promise<{ items?: Array<{ name: string; isDir: boolean; size: number }>; error?: string }>
+        create: (dirPath: string) => Promise<{ success?: boolean; error?: string }>
       }
       web: {
         fetch: (url: string) => Promise<{ content?: string; status?: number; error?: string }>,
@@ -29,6 +30,7 @@ declare global {
       workspace: {
         setRoot: (root: string) => Promise<boolean>
         getRoot: () => Promise<string>
+        getDefault: () => Promise<string>
       }
       ollama: {
         checkInstalled: () => Promise<{ installed: boolean; running: boolean; platform: string }>
@@ -37,7 +39,7 @@ declare global {
         pullModel: (modelName: string) => Promise<{ success: boolean; error?: string }>
         listPulled: () => Promise<{ models?: Array<{ name: string; size: string }>; error?: string }>
         cancel: () => void
-        onProgress: (callback: (data: { stage: string; percent: number; message: string }) => void) => () => void
+        onProgress: (callback: (data: { stage: string; percent: number; message: string; rawLine?: string }) => void) => () => void
       }
       install: {
         cleanupTemp: (tmpDir: string) => Promise<{ success: boolean }>

@@ -164,7 +164,7 @@ export class OllamaProvider extends AIProvider {
           const err = JSON.parse(text)
           msg = err.error || msg
         } catch { /* ignore */ }
-        onChunk({ type: 'error', content: `${msg}. Make sure Ollama is running and the model "${modelId}" is pulled.` })
+        onChunk({ type: 'error', content: `${msg}. Make sure Ollama is running and the model "${modelId}" is pulled. Try switching to a different model or provider in Settings > Models.` })
         return
       }
 
@@ -227,7 +227,10 @@ export class OllamaProvider extends AIProvider {
               emitToolCalls(json.message.tool_calls, onChunk)
             }
           } catch {
-            // partial JSON line, skip
+            // If a line has content but can't be parsed, surface it as text
+            if (line.trim()) {
+              onChunk({ type: 'text', content: line.trim() })
+            }
           }
         }
       }
