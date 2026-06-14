@@ -54,9 +54,9 @@ export function startEvolutionTrigger(
     const now = Date.now()
 
     let runningCount = 0
-    for (const [, state] of sessionEvoState) {
+    sessionEvoState.forEach((state) => {
       if (state.running) runningCount++
-    }
+    })
 
     for (const session of sessions) {
       if (runningCount >= MAX_CONCURRENT) break

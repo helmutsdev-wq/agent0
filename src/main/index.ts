@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent, Menu, dialog } from 'electron'
 import { join, resolve, relative, normalize, isAbsolute, extname } from 'path'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, readFile } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync } from 'fs'
 import { spawnSync, spawn, execFile, ChildProcess } from 'child_process'
 import https from 'https'
 import http from 'http'
@@ -17,7 +17,7 @@ function isInsideWorkspace(filePath: string): boolean {
   const root = resolve(workspaceRoot)
   const candidate = resolve(root, normalize(filePath))
   const rel = relative(root, candidate)
-  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
 function isPathSafe(filePath: string): boolean {
@@ -50,8 +50,7 @@ async function confirmBashCommand(command: string): Promise<boolean> {
     cancelId: 0,
     title: 'Execute Command?',
     message: 'The AI agent wants to run this command:',
-    detail: command,
-    icon: null
+    detail: command
   })
   return response === 1
 }
@@ -396,7 +395,7 @@ ipcMain.handle('web:search', (_event, query: string) => {
       })
     }).on('error', (err) => {
       resolve({ error: `Search failed: ${err.message}` })
-    }).on('timeout', function () {
+    }).on('timeout', function (this: http.ClientRequest) {
       this.destroy()
       resolve({ error: 'Search timed out' })
     })
@@ -408,7 +407,7 @@ ipcMain.handle('web:search', (_event, query: string) => {
 let activeProcess: ChildProcess | null = null
 let activeRequest: http.ClientRequest | null = null
 
-function sendProgress(event: IpcMainInvokeEvent, data: { stage: string; percent: number; message: string }) {
+function sendProgress(event: IpcMainInvokeEvent, data: { stage: string; percent: number; message: string; rawLine?: string }) {
   event.sender.send('ollama:progress', data)
 }
 
@@ -723,18 +722,20 @@ ipcMain.handle('documents:read-pdf-unsafe', async (_event, filePath: string) => 
 })
 
 async function readPdfFile(filePath: string) {
-  const buf = await readFile(filePath)
-  const parser = new PDFParse({ data: buf })
-  await parser.load()
-  const [textResult, infoResult] = await Promise.all([parser.getText(), parser.getInfo()])
-  await parser.destroy()
-  return {
-    content: textResult.text,
-    pages: textResult.total,
-    info: {
-      pdfVersion: infoResult.info?.PDFFormatVersion,
-      isEncrypted: !!infoResult.info?.EncryptFilterName
+  const buf = readFileSync(filePath)
+  const parser = new PDFParse({ data: new Uint8Array(buf) })
+  try {
+    const [textResult, infoResult] = await Promise.all([parser.getText(), parser.getInfo()])
+    return {
+      content: textResult.text,
+      pages: textResult.total,
+      info: {
+        pdfVersion: infoResult.info?.PDFFormatVersion,
+        isEncrypted: !!infoResult.info?.EncryptFilterName
+      }
     }
+  } finally {
+    await parser.destroy()
   }
 }
 
@@ -763,17 +764,19 @@ async function readDocxFile(filePath: string) {
 ipcMain.handle('documents:read-pdf-buffer', async (_event, { base64 }: { base64: string }) => {
   try {
     const buf = Buffer.from(base64, 'base64')
-    const parser = new PDFParse({ data: buf })
-    await parser.load()
-    const [textResult, infoResult] = await Promise.all([parser.getText(), parser.getInfo()])
-    await parser.destroy()
-    return {
-      content: textResult.text,
-      pages: textResult.total,
-      info: {
-        pdfVersion: infoResult.info?.PDFFormatVersion,
-        isEncrypted: !!infoResult.info?.EncryptFilterName
+    const parser = new PDFParse({ data: new Uint8Array(buf) })
+    try {
+      const [textResult, infoResult] = await Promise.all([parser.getText(), parser.getInfo()])
+      return {
+        content: textResult.text,
+        pages: textResult.total,
+        info: {
+          pdfVersion: infoResult.info?.PDFFormatVersion,
+          isEncrypted: !!infoResult.info?.EncryptFilterName
+        }
       }
+    } finally {
+      await parser.destroy()
     }
   } catch (e) {
     return { error: (e as Error).message }

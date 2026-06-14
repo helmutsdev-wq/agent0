@@ -238,13 +238,18 @@ function App() {
     try { return parseInt(localStorage.getItem('agent0_zoom') || '100') } catch { return 100 }
   })
   const [showScrollBottom, setShowScrollBottom] = useState(false)
+  const [showFirstLaunchBanner, setShowFirstLaunchBanner] = useState(false)
   const [sentHistory, setSentHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [historyDraft, setHistoryDraft] = useState('')
 
   const [isDragOver, setIsDragOver] = useState(false)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragCounterRef = useRef(0)
+  const sessionsRef = useRef(sessions)
 
   const hasMessages = messages.length > 1
   const forceUpdate = useReducer(n => n + 1, 0)[1]
@@ -265,6 +270,10 @@ function App() {
     t('suggest.explain'),
     t('suggest.brainstorm')
   ]
+
+  useEffect(() => {
+    sessionsRef.current = sessions
+  }, [sessions])
 
   useEffect(() => {
     restoreAgentConfig()
@@ -886,7 +895,7 @@ function App() {
                       const cfg = getAgentConfig()
                       const next: Mode = cfg.mode === 'build' ? 'plan' : 'build'
                       setAgentConfig({ mode: next })
-                      forceUpdate(n => n + 1)
+                      forceUpdate()
                     }}
                     className={`text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors ${getAgentConfig().mode === 'plan'
                       ? 'btn-mode-plan'

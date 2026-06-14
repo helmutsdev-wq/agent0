@@ -3,8 +3,8 @@ export interface ModelConfig {
   name: string
   provider: string
   capabilities: string[]
-  speed: 'fast' | 'medium' | 'slow'
-  quality: 'low' | 'medium' | 'high'
+  speed: 'very_fast' | 'fast' | 'medium' | 'slow'
+  quality: 'low' | 'medium' | 'high' | 'very_high'
   available: boolean
   cost: 'free' | 'cheap' | 'moderate' | 'expensive'
 }

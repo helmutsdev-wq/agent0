@@ -32,6 +32,14 @@ declare global {
         getRoot: () => Promise<string>
         getDefault: () => Promise<string>
       }
+      documents: {
+        readPdf: (path: string) => Promise<{ content?: string; pages?: number; info?: { pdfVersion?: string; isEncrypted?: boolean }; error?: string }>
+        readPdfUnsafe: (path: string) => Promise<{ content?: string; pages?: number; info?: { pdfVersion?: string; isEncrypted?: boolean }; error?: string }>
+        readPdfBuffer: (base64: string) => Promise<{ content?: string; pages?: number; info?: { pdfVersion?: string; isEncrypted?: boolean }; error?: string }>
+        readDocx: (path: string) => Promise<{ content?: string; error?: string }>
+        readDocxUnsafe: (path: string) => Promise<{ content?: string; error?: string }>
+        readDocxBuffer: (base64: string) => Promise<{ content?: string; error?: string }>
+      }
       ollama: {
         checkInstalled: () => Promise<{ installed: boolean; running: boolean; platform: string }>
         downloadInstaller: () => Promise<{ success: boolean; path?: string; error?: string; platform?: string }>
@@ -46,15 +54,5 @@ declare global {
       }
       platform: string
     }
-      documents: {
-        readPdf: (path: string) => Promise<{ content?: string; pages?: number; info?: { pdfVersion?: string; isEncrypted?: boolean }; error?: string }>
-        readPdfUnsafe: (path: string) => Promise<{ content?: string; pages?: number; info?: { pdfVersion?: string; isEncrypted?: boolean }; error?: string }>
-        readPdfBuffer: (base64: string) => Promise<{ content?: string; pages?: number; info?: { pdfVersion?: string; isEncrypted?: boolean }; error?: string }>
-        readDocx: (path: string) => Promise<{ content?: string; error?: string }>
-        readDocxUnsafe: (path: string) => Promise<{ content?: string; error?: string }>
-        readDocxBuffer: (base64: string) => Promise<{ content?: string; error?: string }>
-      }
-    }
-  }
   }
 }

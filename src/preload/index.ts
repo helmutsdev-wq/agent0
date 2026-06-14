@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-export type ProgressCallback = (data: { stage: string; percent: number; message: string }) => void
+export type ProgressCallback = (data: { stage: string; percent: number; message: string; rawLine?: string }) => void
 
 const api = {
   file: {

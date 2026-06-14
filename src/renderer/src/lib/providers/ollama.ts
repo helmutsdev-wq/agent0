@@ -17,7 +17,10 @@ function stripInlineFunctions(content: string): string {
 
 function emitToolCalls(toolCalls: Array<Record<string, unknown>>, onChunk: (chunk: StreamChunk) => void) {
   for (const tc of toolCalls) {
-    const fn = tc.function || tc
+    const fn = (typeof tc.function === 'object' && tc.function !== null ? tc.function : tc) as {
+      name?: unknown
+      arguments?: unknown
+    }
     try {
       const input = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : (fn.arguments || {})
       onChunk({
