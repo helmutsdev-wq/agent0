@@ -521,7 +521,7 @@ ipcMain.handle('ollama:install-ollama', async (event, installerPath: string) => 
       const startTime = Date.now()
       const progressTimer = setInterval(() => {
         const elapsed = Date.now() - startTime
-        const pct = Math.min(Math.round((elapsed / 120000) * 75), 74)
+        const pct = Math.min(Math.round((elapsed / 300000) * 95), 95)
         sendProgress(event, { stage: 'installing', percent: pct, message: `Installing Ollama... ${Math.round(elapsed / 1000)}s` })
       }, 1000)
 
@@ -531,7 +531,7 @@ ipcMain.handle('ollama:install-ollama', async (event, installerPath: string) => 
         clearInterval(progressTimer)
         activeProcess = null
         if (code === 0) {
-          sendProgress(event, { stage: 'installed', percent: 80, message: 'Ollama installed successfully' })
+          sendProgress(event, { stage: 'installed', percent: 100, message: 'Ollama installed successfully' })
           resolve({ success: true })
         } else {
           sendProgress(event, { stage: 'error', percent: 0, message: `Install failed with code ${code}` })
