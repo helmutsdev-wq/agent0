@@ -58,7 +58,7 @@ type Dict = Record<string, string>
 
 const en: Dict = {
   // App
-  'app.title': 'Agent0',
+  'app.title': 'Agent O',
   'app.settings': 'Settings',
   'app.hero.title': 'What can I help you with?',
   'app.hero.desc': 'I can write, research, summarize, brainstorm, and more — using the best AI model for each task.',
@@ -70,6 +70,9 @@ const en: Dict = {
   'app.thinking': 'Thinking...',
   'app.modeBuild': 'Build',
   'app.modePlan': 'Plan',
+  'app.attachFile': 'Attach file',
+  'app.dropFiles': 'Drop files here',
+  'app.dropFilesDesc': 'Add files for the AI to read',
 
   // Suggestions
   'suggest.trip': 'Plan a weekend trip',
@@ -80,14 +83,14 @@ const en: Dict = {
   'suggest.brainstorm': 'Brainstorm creative ideas',
 
   // Welcome
-  'welcome': "Hi! I'm Agent0. I can help you with coding, research, and tasks using multiple AI models. What would you like to do?",
+  'welcome': "Hi! I'm Agent O. I can help you with coding, research, and tasks using multiple AI models. What would you like to do?",
 
   // Settings
   'settings.title': 'Settings',
   'settings.desc': 'Configure AI providers, models, and API keys',
   'settings.tab.models': 'General',
-  'settings.tab.keys': 'API Keys',
-  'settings.tab.local': 'Local Setup',
+  'settings.tab.keys': 'API',
+  'settings.tab.local': 'Local',
   'settings.tab.about': 'About',
   'settings.language': 'Language',
   'settings.autoFallback': 'Auto-fallback',
@@ -107,7 +110,7 @@ const en: Dict = {
   'settings.noKey': 'No Key',
   'settings.error': 'Error',
   'settings.requiresKey': 'Requires Key',
-  'settings.about.version': 'Agent0 v0.1.0',
+  'settings.about.version': 'Agent O v0.1.0',
   'settings.about.desc': 'An AI agent desktop app that routes tasks to the best model across multiple providers.',
   'settings.about.providers': 'Free providers: Ollama (local), Gemini (Google), Groq, Hugging Face',
   'settings.about.troubleshooting': 'Troubleshooting API Keys',
@@ -152,8 +155,24 @@ const en: Dict = {
   'local.step2': 'Installing Ollama',
   'local.step3': 'Downloading AI model',
   'local.step1desc': 'Downloading the Ollama installer (~300 MB). Speed depends on your connection.',
-  'local.step2desc': 'Running silent installer. This can take 1-2 minutes with no visible window.',
+  'local.step2desc': 'Running silent installer. This can take several minutes.',
   'local.step3desc': 'Downloading the {{model}} AI model ({{size}}). This is the largest step.',
+  'local.installedModels': 'Installed Models',
+  'local.installedModelsDesc': 'Models already pulled and ready to use. Click to switch.',
+  'local.setActive': 'Set active',
+  'local.active': 'Active',
+  'local.recoveryTitle': 'Previous setup was interrupted',
+  'local.recoveryDownloading': 'The installer download was interrupted. The partial file has been cleaned up.',
+  'local.recoveryInstalling': 'Ollama installation was interrupted.',
+  'local.recoveryPulling': 'The model download was interrupted.',
+  'local.recoveryResume': 'Resume',
+  'local.recoveryRestart': 'Restart Setup',
+  'local.recoveryDismiss': 'Dismiss',
+  'local.recoveryComplete': 'Looks like it actually completed!',
+  'local.firstLaunchTitle': 'Run AI models locally?',
+  'local.firstLaunchDesc': 'Download Llama 3.2 (2 GB) — a free, fast, local AI model. No internet needed after download.',
+  'local.firstLaunchDownload': 'Download',
+  'local.firstLaunchSkip': 'Skip',
 
   // Tool events
   'tool.running': 'Running',
@@ -163,7 +182,7 @@ const en: Dict = {
   'tool.result': 'Result',
 
   // System prompt
-  'system.prompt': `You are Agent0, an AI assistant running on Windows. You have access to tools: read_file, write_file, edit_file, list_files, bash, web_fetch, web_search. Use them when needed. Be helpful, concise, and honest.`,
+  'system.prompt': `You are Agent O, an AI assistant running on Windows. You have access to tools: read_file, write_file, edit_file, list_files, bash, web_fetch, web_search, code_search, format_file, run_tests, read_memory, append_memory, read_daily, append_daily. Use them when needed. Be helpful, concise, and honest.`,
   'system.planPrefix': `You are in PLAN mode. Explain your approach step by step before executing any tools. Wait for the user to tell you to proceed before taking action.`,
 
   // Agent
@@ -178,6 +197,24 @@ const en: Dict = {
   'agent.modelFailed': 'Model "{{model}}" is not available. Go to Settings > Models and pick a different model or enable Smart Routing.',
   'agent.error': 'Agent error: {{message}}',
 
+  // Memory
+  'memory.tab': 'Memory',
+  'memory.context': 'Memory Context',
+  'memory.contextDesc': 'Long-term memory loaded into every conversation',
+  'memory.read': 'Read memory',
+  'memory.append': 'Append to memory',
+
+  // Evolution
+  'evolution.title': 'Self-Evolution',
+  'evolution.enabled': 'Enabled',
+  'evolution.enabledDesc': 'Automatically review idle conversations to consolidate memory',
+  'evolution.idleMinutes': 'Idle minutes',
+  'evolution.idleMinutesDesc': 'How long a conversation must be idle before review',
+  'evolution.minTurns': 'Minimum turns',
+  'evolution.minTurnsDesc': 'Minimum user turns before review triggers',
+  'evolution.capturing': 'Evolution capturing...',
+  'evolution.completed': 'Evolution captured memory',
+
   // Providers
   'provider.ollama': 'Ollama',
   'provider.gemini': 'Google Gemini',
@@ -188,7 +225,7 @@ const en: Dict = {
 
 const lv: Dict = {
   // App
-  'app.title': 'Agent0',
+  'app.title': 'Agent O',
   'app.settings': 'Iestatījumi',
   'app.hero.title': 'Kā es varu palīdzēt?',
   'app.hero.desc': 'Es varu rakstīt, pētīt, apkopot, ideju vētru un vēl — izmantojot labāko AI modeli katram uzdevumam.',
@@ -200,6 +237,9 @@ const lv: Dict = {
   'app.thinking': 'Domā...',
   'app.modeBuild': 'Build',
   'app.modePlan': 'Plāns',
+  'app.attachFile': 'Pievienot failu',
+  'app.dropFiles': 'Metiet failus šeit',
+  'app.dropFilesDesc': 'Pievienojiet failus, lai AI tos varētu lasīt',
 
   // Suggestions
   'suggest.trip': 'Izplāno nedēļas nogales ceļojumu',
@@ -210,13 +250,13 @@ const lv: Dict = {
   'suggest.brainstorm': 'Ideju vētras radošām idejām',
 
   // Welcome
-  'welcome': 'Sveiks! Es esmu Agent0. Es varu palīdzēt ar programmēšanu, pētniecību un uzdevumiem, izmantojot vairākus AI modeļus. Ar ko vēlies sākt?',
+  'welcome': 'Sveiks! Es esmu Agent O. Es varu palīdzēt ar programmēšanu, pētniecību un uzdevumiem, izmantojot vairākus AI modeļus. Ar ko vēlies sākt?',
 
   // Settings
   'settings.title': 'Iestatījumi',
   'settings.desc': 'Konfigurē AI nodrošinātājus, modeļus un API atslēgas',
   'settings.tab.models': 'Vispārīgi',
-  'settings.tab.keys': 'API Atslēgas',
+  'settings.tab.keys': 'API',
   'settings.tab.local': 'Lokāli',
   'settings.tab.about': 'Par',
   'settings.language': 'Valoda',
@@ -237,7 +277,7 @@ const lv: Dict = {
   'settings.noKey': 'Nav atslēgas',
   'settings.error': 'Kļūda',
   'settings.requiresKey': 'Nepieciešama atslēga',
-  'settings.about.version': 'Agent0 v0.1.0',
+  'settings.about.version': 'Agent O v0.1.0',
   'settings.about.desc': 'AI aģenta darbvirsmas lietotne, kas maršrutē uzdevumus uz labāko modeli starp vairākiem nodrošinātājiem.',
   'settings.about.providers': 'Bezmaksas nodrošinātāji: Ollama (lokāli), Gemini (Google), Groq, Hugging Face',
   'settings.about.troubleshooting': 'API atslēgu problēmu risināšana',
@@ -282,8 +322,24 @@ const lv: Dict = {
   'local.step2': 'Instalē Ollama',
   'local.step3': 'Lejupielādē AI modeli',
   'local.step1desc': 'Lejupielādē Ollama instalētāju (~300 MB). Ātrums atkarīgs no jūsu interneta savienojuma.',
-  'local.step2desc': 'Palaiž kluso instalētāju. Tas var aizņemt 1-2 minūtes bez redzama loga.',
+  'local.step2desc': 'Palaiž kluso instalētāju. Tas var aizņemt vairākas minūtes.',
   'local.step3desc': 'Lejupielādē {{model}} AI modeli ({{size}}). Šis ir lielākais solis.',
+  'local.installedModels': 'Instalētie modeļi',
+  'local.installedModelsDesc': 'Modeļi, kas jau ir lejupielādēti un gatavi lietošanai. Spied, lai aktivizētu.',
+  'local.setActive': 'Aktivizēt',
+  'local.active': 'Aktīvs',
+  'local.recoveryTitle': 'Iepriekšējā iestatīšana tika pārtraukta',
+  'local.recoveryDownloading': 'Instalētāja lejupielāde tika pārtraukta. Daļējais fails ir izdzēsts.',
+  'local.recoveryInstalling': 'Ollama instalācija tika pārtraukta.',
+  'local.recoveryPulling': 'Modeļa lejupielāde tika pārtraukta.',
+  'local.recoveryResume': 'Turpināt',
+  'local.recoveryRestart': 'Sākt no jauna',
+  'local.recoveryDismiss': 'Nerādīt',
+  'local.recoveryComplete': 'Izskatās, ka tas jau ir pabeigts!',
+  'local.firstLaunchTitle': 'Palaist AI modeļus lokāli?',
+  'local.firstLaunchDesc': 'Lejupielādē Llama 3.2 (2 GB) — bezmaksas, ātru, lokālu AI modeli. Pēc lejupielādes internets nav vajadzīgs.',
+  'local.firstLaunchDownload': 'Lejupielādēt',
+  'local.firstLaunchSkip': 'Izlaist',
 
   // Tool events
   'tool.running': 'Izpilda',
@@ -293,7 +349,7 @@ const lv: Dict = {
   'tool.result': 'Rezultāts',
 
   // System prompt
-  'system.prompt': `Tu esi Agent0, AI asistents uz Windows. Tev ir piekļuve rīkiem: read_file, write_file, edit_file, list_files, bash, web_fetch, web_search. Izmanto tos, kad vajag. Esi izpalīdzīgs, kodolīgs un godīgs. Atbildi tajā pašā valodā, kurā lietotājs raksta.`,
+  'system.prompt': `Tu esi Agent O, AI asistents uz Windows. Tev ir piekļuve rīkiem: read_file, write_file, edit_file, list_files, bash, web_fetch, web_search, code_search, format_file, run_tests, read_memory, append_memory, read_daily, append_daily. Izmanto tos, kad vajag. Esi izpalīdzīgs, kodolīgs un godīgs. Atbildi tajā pašā valodā, kurā lietotājs raksta.`,
   'system.planPrefix': `Tu esi PLĀNA režīmā. Pirms jebkādu rīku izmantošanas, soli pa solim izskaidro savu pieeju. Nogaidi, kamēr lietotājs atļauj turpināt, pirms sāc darboties.`,
 
   // Agent
@@ -307,6 +363,24 @@ const lv: Dict = {
   'agent.providerNotFound': 'Nodrošinātājs "{{provider}}" nav atrasts. Pārbaudi Iestatījumus.',
   'agent.modelFailed': 'Modelis "{{model}}" nav pieejams. Dodies uz Iestatījumi > Modeļi un izvēlies citu modeli vai ieslēdz Viedo maršrutēšanu.',
   'agent.error': 'Aģenta kļūda: {{message}}',
+
+  // Memory
+  'memory.tab': 'Atmiņa',
+  'memory.context': 'Atmiņas konteksts',
+  'memory.contextDesc': 'Ilgtermiņa atmiņa, kas tiek ielādēta katrā sarunā',
+  'memory.read': 'Lasīt atmiņu',
+  'memory.append': 'Pievienot atmiņai',
+
+  // Evolution
+  'evolution.title': 'Pašattīstība',
+  'evolution.enabled': 'Ieslēgts',
+  'evolution.enabledDesc': 'Automātiski pārskatīt tukšas sarunas, lai konsolidētu atmiņu',
+  'evolution.idleMinutes': 'Tukšuma minūtes',
+  'evolution.idleMinutesDesc': 'Cik ilgi sarunai jābūt tukšai pirms pārskatīšanas',
+  'evolution.minTurns': 'Minimālās uzrunas',
+  'evolution.minTurnsDesc': 'Minimālais lietotāja uzrunu skaits pirms pārskatīšanas',
+  'evolution.capturing': 'Attīstība notiek...',
+  'evolution.completed': 'Attīstība saglabāta atmiņā',
 
   // Providers
   'provider.ollama': 'Ollama',

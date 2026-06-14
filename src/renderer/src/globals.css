@@ -77,6 +77,19 @@ body {
   background: #444;
 }
 
+.btn-mode-plan {
+  border-color: rgba(108, 92, 231, 0.5);
+  color: var(--accent, #6c5ce7);
+  background-color: rgba(108, 92, 231, 0.1);
+}
+.btn-mode-build {
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+.btn-mode-build:hover {
+  color: var(--text-primary);
+}
+
 details > summary {
   list-style: none;
 }

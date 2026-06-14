@@ -55,7 +55,7 @@ export function SessionSidebar({ sessions, activeSessionId, onCreate, onSwitch, 
               </button>
             </div>
           )}
-          {sessions.map(session => (
+          {[...sessions].sort((a, b) => b.updatedAt - a.updatedAt).map(session => (
             <SessionItem
               key={session.id}
               session={session}

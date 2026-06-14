@@ -1,11 +1,12 @@
 appId: com.agent0.app
-productName: Agent0
+productName: Agent O
 directories:
   buildResources: build
   output: release2
 files:
   - out/**/*
   - "!node_modules/**/*"
+icon: build/icon.png
 win:
   target:
     - nsis
@@ -15,4 +16,4 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
-  shortcutName: Agent0
+  shortcutName: Agent O

@@ -15,6 +15,28 @@ function stripInlineFunctions(content: string): string {
   return content.replace(/<function\/[^>]+>\{[\s\S]*?\}<\/function>/g, '')
 }
 
+function emitToolCalls(toolCalls: Array<Record<string, unknown>>, onChunk: (chunk: StreamChunk) => void) {
+  for (const tc of toolCalls) {
+    const fn = tc.function || tc
+    try {
+      const input = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : (fn.arguments || {})
+      onChunk({
+        type: 'tool_call',
+        content: '',
+        toolCallId: (tc.id as string) || (fn.name as string),
+        toolCallName: fn.name as string,
+        toolCallArgs: typeof fn.arguments === 'string' ? fn.arguments as string : JSON.stringify(fn.arguments || {})
+      })
+      onChunk({
+        type: 'tool_use',
+        content: `Using ${fn.name}...`,
+        toolName: fn.name as string,
+        toolInput: input
+      })
+    } catch { /* skip */ }
+  }
+}
+
 interface OllamaModel {
   name: string
   modified_at: string
@@ -59,8 +81,8 @@ export class OllamaProvider extends AIProvider {
       cost: 'free'
     },
     {
-      id: 'deepseek-coder:6.7b',
-      name: 'DeepSeek Coder 6.7B',
+      id: 'deepseek-coder-v2',
+      name: 'DeepSeek Coder V2',
       provider: 'ollama',
       capabilities: ['code'],
       speed: 'medium',
@@ -85,13 +107,27 @@ export class OllamaProvider extends AIProvider {
       const res = await fetch(`${this.baseUrl}/api/tags`)
       if (!res.ok) return false
       const data = await res.json()
-      const availableModels = new Set(
-        (data.models as OllamaModel[]).map(m => m.name.replace(':latest', ''))
-      )
+      const pulledModels = (data.models as OllamaModel[]).map(m => m.name.replace(':latest', ''))
+      const pulledSet = new Set(pulledModels.map(m => m.split(':')[0]))
       for (const model of this.models) {
-        model.available = availableModels.has(model.id) || availableModels.has(`${model.id}:latest`)
+        model.available = pulledModels.includes(model.id) || pulledModels.includes(`${model.id}:latest`) || pulledSet.has(model.id) || pulledModels.includes(model.id.split(':')[0])
       }
-      return data.models && data.models.length > 0
+      const knownIds = new Set(this.models.map(m => m.id))
+      for (const pulled of pulledModels) {
+        if (!knownIds.has(pulled) && !knownIds.has(pulled.split(':')[0])) {
+          this.models.push({
+            id: pulled,
+            name: pulled,
+            provider: 'ollama',
+            capabilities: ['chat', 'code'],
+            speed: 'medium',
+            quality: 'medium',
+            available: true,
+            cost: 'free'
+          })
+        }
+      }
+      return this.models.length > 0
     } catch {
       this.models.forEach(m => (m.available = false))
       return false
@@ -188,25 +224,7 @@ export class OllamaProvider extends AIProvider {
               }
             }
             if (json.message?.tool_calls) {
-              for (const tc of json.message.tool_calls) {
-                const fn = tc.function || tc
-                try {
-                  const input = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : (fn.arguments || {})
-                  onChunk({
-                    type: 'tool_call',
-                    content: '',
-                    toolCallId: tc.id || fn.name,
-                    toolCallName: fn.name,
-                    toolCallArgs: typeof fn.arguments === 'string' ? fn.arguments : JSON.stringify(fn.arguments || {})
-                  })
-                  onChunk({
-                    type: 'tool_use',
-                    content: `Using ${fn.name}...`,
-                    toolName: fn.name,
-                    toolInput: input
-                  })
-                } catch { /* skip */ }
-              }
+              emitToolCalls(json.message.tool_calls, onChunk)
             }
           } catch {
             // partial JSON line, skip
@@ -224,9 +242,7 @@ export class OllamaProvider extends AIProvider {
             onChunk({ type: 'text', content: json.message.content })
           }
           if (json.message?.tool_calls) {
-            for (const tc of json.message.tool_calls) {
-              // handle buffer tool calls same as above
-            }
+            emitToolCalls(json.message.tool_calls, onChunk)
           }
         } catch {
           // ignore trailing partial

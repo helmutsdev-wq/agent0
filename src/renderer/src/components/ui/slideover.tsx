@@ -31,7 +31,7 @@ export function SlideOver({
       />
       <div
         className={cn(
-          'fixed top-0 right-0 z-50 h-full w-[380px] bg-[var(--bg-secondary)] border-l border-[var(--border)] shadow-2xl transition-transform duration-200 ease-out',
+          'fixed top-0 right-0 z-50 h-full w-[480px] bg-[var(--bg-secondary)] border-l border-[var(--border)] shadow-2xl transition-transform duration-200 ease-out',
           open ? 'translate-x-0' : 'translate-x-full'
         )}
       >

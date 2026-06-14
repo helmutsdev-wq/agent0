@@ -1,11 +1,29 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { ChatMessage } from '../lib/providers/types'
+import { noteUserTurn } from '../lib/evolution/trigger'
 import { runAgent, setAgentConfig, getAgentConfig } from '../lib/agent'
 import { t } from '../lib/i18n'
 import { incrementMessages, incrementTools, addToSession, getSessionStats } from '../lib/usage'
 import { getProvider } from '../lib/providers'
 import { ChatSession, loadSessions, saveSessions, createSession, generateSessionTitle } from '../lib/sessionStore'
-import { UIMessage, ToolEvent } from '../lib/types'
+import { UIMessage, ToolEvent, AttachedFile, formatFileSize } from '../lib/types'
+
+function enrichWithAttachments(msg: UIMessage): string {
+  if (!msg.attachments || msg.attachments.length === 0) return msg.content
+  const blocks = msg.attachments.map(a => {
+    if (a.error) {
+      return `[Attached file: ${a.name} (${formatFileSize(a.size)}) — failed to read: ${a.error}]`
+    }
+    if (a.fileType === 'image' && a.imageDataUrl) {
+      return `[Attached image: ${a.name} (${formatFileSize(a.size)})]\n${a.imageDataUrl}`
+    }
+    if (a.content) {
+      return `[Attached file: ${a.name} (${formatFileSize(a.size)})]\n\`\`\`\n${a.content}\n\`\`\``
+    }
+    return `[Attached file: ${a.name} (${formatFileSize(a.size)})]`
+  }).join('\n\n')
+  return blocks + '\n\n' + msg.content
+}
 
 export type { UIMessage, ToolEvent }
 
@@ -75,16 +93,20 @@ export function useChat() {
     })
   }, [])
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, attachments?: AttachedFile[]) => {
     const session = sessionsRef.current.find(s => s.id === activeIdRef.current)
-    if (!session || !content.trim() || session.isLoading) return
+    if (!session || (!content.trim() && (!attachments || attachments.length === 0)) || session.isLoading) return
 
     const sid = activeIdRef.current
 
+    noteUserTurn(sid, session.messages.length + 1)
+
+    const userContent = content.trim()
     const userMsg: UIMessage = {
       id: `${Date.now()}-user`,
       role: 'user',
-      content: content.trim()
+      content: userContent || (attachments?.length ? `Attached: ${attachments.map(a => a.name).join(', ')}` : ''),
+      attachments
     }
 
     const assistantMsg: UIMessage = {
@@ -114,16 +136,18 @@ export function useChat() {
     const abortController = new AbortController()
     abortRef.current = abortController
 
+    const myAiContent = enrichWithAttachments({ ...userMsg, content: content.trim() })
+
     const chatMessages: ChatMessage[] = [
       ...prevMessages
         .filter(m => m.id !== 'welcome')
-        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-      { role: 'user' as const, content: content.trim() }
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: enrichWithAttachments(m) })),
+      { role: 'user' as const, content: myAiContent }
     ]
 
     let fullResponse = ''
     let toolCount = 0
-    const inputChars = content.trim().length
+    const inputChars = myAiContent.length
 
     try {
       await runAgent(
@@ -240,7 +264,12 @@ export function useChat() {
         const msgs = [...s.messages]
         const last = msgs[msgs.length - 1]
         if (last?.isStreaming) {
-          msgs[msgs.length - 1] = { ...last, isStreaming: false }
+          if (!last.content) {
+            // No content received — remove the empty assistant message
+            msgs.pop()
+          } else {
+            msgs[msgs.length - 1] = { ...last, isStreaming: false }
+          }
         }
         return { ...s, messages: msgs, isLoading: false }
       })

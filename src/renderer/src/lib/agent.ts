@@ -3,6 +3,7 @@ import { getProvider, initProviders, getAllModels, getAvailableModels } from './
 import { executeTool } from './tools'
 import { classifyAndRoute } from './router'
 import { t } from './i18n'
+import { getMemoryContext, initMemoryFiles } from './memory'
 
 export type Mode = 'build' | 'plan'
 
@@ -115,8 +116,18 @@ export async function runAgent(
       }
     }
 
+    const ws = currentConfig.workspaceRoot
+    let sysPrompt = getEffectiveSystemPrompt()
+    if (ws) {
+      await initMemoryFiles(ws)
+      const memoryCtx = await getMemoryContext(ws)
+      if (memoryCtx) {
+        sysPrompt = `[Long-term Memory]\n${memoryCtx}\n\n---\n${sysPrompt}`
+      }
+    }
+
     const allMessages: ChatMessage[] = [
-      { role: 'system', content: getEffectiveSystemPrompt() },
+      { role: 'system', content: sysPrompt },
       ...messages
     ]
 

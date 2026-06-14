@@ -3,6 +3,7 @@ import { getConfigs, getProvider } from '../lib/providers'
 import { getAgentConfig, setAgentConfig } from '../lib/agent'
 import { SlideOver } from './ui/slideover'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
+import { getEvolutionConfig, setEvolutionConfig } from '../lib/evolution/config'
 import { Input, Label } from './ui/input'
 import { Badge } from './ui/badge'
 import { LocalModelSetup } from './LocalModelSetup'
@@ -35,16 +36,19 @@ export function SettingsDialog({
   open,
   onOpenChange,
   onRecheckProviders,
-  onConfigChange
+  onConfigChange,
+  defaultTab
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onRecheckProviders: () => void
   onConfigChange?: () => void
+  defaultTab?: string
 }) {
   const { t, lang, setLang } = useLanguage()
   const [, forceUpdate] = React.useState(0)
-  const [activeTab, setActiveTab] = React.useState('models')
+  const [activeTab, setActiveTab] = React.useState(defaultTab || 'models')
+  React.useEffect(() => { if (open && defaultTab) setActiveTab(defaultTab) }, [open, defaultTab])
   const [localApiKeys, setLocalApiKeys] = React.useState<Record<string, string>>(() => ({
     gemini: localStorage.getItem('gemini_api_key') || '',
     groq: localStorage.getItem('groq_api_key') || '',
@@ -53,6 +57,9 @@ export function SettingsDialog({
   }))
   const [visibleKeys, setVisibleKeys] = React.useState<Record<string, boolean>>({})
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null)
+  const [autoStartInstall, setAutoStartInstall] = React.useState(false)
+
+  React.useEffect(() => { if (open && defaultTab === 'local') setAutoStartInstall(true) }, [open, defaultTab])
 
   function copyKey(provider: string, value: string) {
     navigator.clipboard.writeText(value)
@@ -68,12 +75,9 @@ export function SettingsDialog({
   }
 
   function handleProviderChange(providerId: string) {
-    setAgentConfig({ provider: providerId })
     const p = getProvider(providerId)
-    const firstAvailable = p?.models.find(m => m.available)
-    if (firstAvailable) {
-      setAgentConfig({ model: firstAvailable.id })
-    }
+    const firstModel = p?.models.find(m => m.available) || p?.models[0]
+    setAgentConfig({ provider: providerId, model: firstModel?.id || '' })
     onRecheckProviders()
     forceUpdate(n => n + 1)
     onConfigChange?.()
@@ -100,6 +104,9 @@ export function SettingsDialog({
           </TabsTrigger>
           <TabsTrigger value="local" activeValue={activeTab} onClick={() => setActiveTab('local')}>
             {t('settings.tab.local')}
+          </TabsTrigger>
+          <TabsTrigger value="memory" activeValue={activeTab} onClick={() => setActiveTab('memory')}>
+            {t('memory.tab')}
           </TabsTrigger>
           <TabsTrigger value="about" activeValue={activeTab} onClick={() => setActiveTab('about')}>
             {t('settings.tab.about')}
@@ -523,7 +530,89 @@ export function SettingsDialog({
         </TabsContent>
 
         <TabsContent value="local" activeValue={activeTab}>
-          <LocalModelSetup onComplete={() => forceUpdate(n => n + 1)} />
+          <LocalModelSetup onComplete={() => { forceUpdate(n => n + 1); onRecheckProviders() }} autoStart={autoStartInstall} />
+        </TabsContent>
+
+        <TabsContent value="memory" activeValue={activeTab}>
+          <div className="space-y-4">
+            <div className="rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
+              <Label className="mb-1 block">{t('memory.context')}</Label>
+              <p className="text-xs text-[var(--text-secondary)] mb-2">
+                {t('memory.contextDesc')}
+              </p>
+              <p className="text-xs text-[var(--text-secondary)]">
+                MEMORY.md is auto-loaded into every conversation. The agent can read
+                and append to it using the read_memory / append_memory tools.
+              </p>
+            </div>
+
+            <div className="rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="cursor-pointer">{t('evolution.title')}</Label>
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                    {t('evolution.enabledDesc')}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const cfg = getEvolutionConfig()
+                    setEvolutionConfig({ enabled: !cfg.enabled })
+                    forceUpdate(n => n + 1)
+                  }}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                    getEvolutionConfig().enabled ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                      getEvolutionConfig().enabled ? 'translate-x-5' : ''
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {getEvolutionConfig().enabled && (
+              <>
+                <div className="rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
+                  <Label className="mb-1 block">{t('evolution.idleMinutes')}</Label>
+                  <p className="text-xs text-[var(--text-secondary)] mb-2">
+                    {t('evolution.idleMinutesDesc')}
+                  </p>
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={getEvolutionConfig().idleMinutes}
+                    onChange={e => {
+                      setEvolutionConfig({ idleMinutes: parseInt(e.target.value) || 10 })
+                      forceUpdate(n => n + 1)
+                    }}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                  />
+                </div>
+
+                <div className="rounded-lg bg-[var(--bg-tertiary)] px-3 py-2">
+                  <Label className="mb-1 block">{t('evolution.minTurns')}</Label>
+                  <p className="text-xs text-[var(--text-secondary)] mb-2">
+                    {t('evolution.minTurnsDesc')}
+                  </p>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={getEvolutionConfig().minTurns}
+                    onChange={e => {
+                      setEvolutionConfig({ minTurns: parseInt(e.target.value) || 6 })
+                      forceUpdate(n => n + 1)
+                    }}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
+                  />
+                </div>
+              </>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="about" activeValue={activeTab}>

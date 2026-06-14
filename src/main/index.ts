@@ -1,10 +1,12 @@
 import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent, Menu, dialog } from 'electron'
-import { join, resolve, relative, normalize, isAbsolute } from 'path'
-import { existsSync, readFileSync, writeFileSync, mkdtempSync } from 'fs'
-import { spawnSync, spawn, execFile } from 'child_process'
+import { join, resolve, relative, normalize, isAbsolute, extname } from 'path'
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, readFile } from 'fs'
+import { spawnSync, spawn, execFile, ChildProcess } from 'child_process'
 import https from 'https'
 import http from 'http'
 import { tmpdir } from 'os'
+import { PDFParse } from 'pdf-parse'
+import mammoth from 'mammoth'
 
 // ─── Workspace Scoping ────────────────────────────────────────────────────
 
@@ -75,7 +77,8 @@ function createWindow(): void {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    title: 'Agent0',
+    title: 'Agent O',
+    icon: join(__dirname, '../../build/icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -102,17 +105,7 @@ function createWindow(): void {
   }
 }
 
-const appMenu = Menu.buildFromTemplate([
-  {
-    label: 'View',
-    submenu: [
-      { label: 'Zoom In', role: 'zoomIn', accelerator: 'CmdOrCtrl+Plus' },
-      { label: 'Zoom Out', role: 'zoomOut', accelerator: 'CmdOrCtrl+-' },
-      { label: 'Reset Zoom', role: 'resetZoom', accelerator: 'CmdOrCtrl+0' }
-    ]
-  }
-])
-Menu.setApplicationMenu(appMenu)
+Menu.setApplicationMenu(null)
 
 app.whenReady().then(createWindow)
 
@@ -138,6 +131,14 @@ ipcMain.handle('workspace:get-root', () => workspaceRoot)
 ipcMain.handle('file:read', (_event, filePath: string) => {
   try {
     if (!isPathSafe(filePath)) return { error: 'Access denied: outside workspace' }
+    return { content: readFileSync(filePath, 'utf-8') }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+ipcMain.handle('file:read-unsafe', (_event, filePath: string) => {
+  try {
     return { content: readFileSync(filePath, 'utf-8') }
   } catch (e) {
     return { error: (e as Error).message }
@@ -208,6 +209,62 @@ ipcMain.handle('bash:exec', async (_event, command: string) => {
         resolve({ error: err.message })
       })
     })
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+// ─── Code Tools IPC ───────────────────────────────────────────────────────
+
+ipcMain.handle('code:search', async (_event, pattern: string, searchPath?: string) => {
+  const dir = searchPath || '.'
+  try {
+    if (workspaceRoot && !isInsideWorkspace(dir)) {
+      return { error: 'Access denied: outside workspace' }
+    }
+    const result = spawnSync('rg', ['-n', '--no-heading', '-i', pattern, dir], { encoding: 'utf-8', timeout: 15000, shell: true })
+    if (result.error && result.error.message.includes('ENOENT')) {
+      return { error: 'ripgrep (rg) is not installed. Install from https://github.com/BurntSushi/ripgrep' }
+    }
+    if (result.status !== 0 && !result.stdout) {
+      return { error: result.stderr || `No matches for "${pattern}"` }
+    }
+    const lines = result.stdout.split('\n').filter(Boolean)
+    const output = lines.slice(0, 100).join('\n')
+    const truncated = lines.length > 100 ? `\n... and ${lines.length - 100} more matches` : ''
+    return { content: output + truncated }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+ipcMain.handle('code:format', async (_event, filePath: string) => {
+  try {
+    if (!isPathSafe(filePath)) return { error: 'Access denied: outside workspace' }
+    const result = spawnSync('npx', ['prettier', '--write', filePath], { encoding: 'utf-8', timeout: 30000, shell: true })
+    if (result.error) {
+      return { error: result.error.message }
+    }
+    if (result.status !== 0) {
+      return { error: result.stderr || 'Formatting failed' }
+    }
+    return { content: `Formatted: ${filePath}` }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+ipcMain.handle('code:test', async (_event, command: string) => {
+  try {
+    if (!isCommandSafe(command)) return { error: 'Blocked: dangerous command detected' }
+    const confirmed = await confirmBashCommand(command)
+    if (!confirmed) return { error: 'Execution cancelled — user denied permission' }
+    const result = spawnSync(command, [], { encoding: 'utf-8', timeout: 60000, shell: true })
+    const output = (result.stdout || '') + (result.stderr || '')
+    if (result.status !== 0) {
+      return { error: output.slice(0, 10000) || `Exit code ${result.status}` }
+    }
+    return { content: output.slice(0, 10000) }
   } catch (e) {
     return { error: (e as Error).message }
   }
@@ -337,6 +394,9 @@ ipcMain.handle('web:search', (_event, query: string) => {
 
 // ─── Ollama One-Click Setup ────────────────────────────────────────────
 
+let activeProcess: ChildProcess | null = null
+let activeRequest: http.ClientRequest | null = null
+
 function sendProgress(event: IpcMainInvokeEvent, data: { stage: string; percent: number; message: string }) {
   event.sender.send('ollama:progress', data)
 }
@@ -403,6 +463,7 @@ ipcMain.handle('ollama:download-installer', async (event) => {
 
     const file = require('fs').createWriteStream(dest)
     const request = https.get(url, (response) => {
+      activeRequest = request
       const total = parseInt(response.headers['content-length'] || '0', 10)
       let downloaded = 0
 
@@ -427,6 +488,7 @@ ipcMain.handle('ollama:download-installer', async (event) => {
     })
 
     request.on('error', (err) => {
+      activeRequest = null
       sendProgress(event, { stage: 'error', percent: 0, message: `Download failed: ${err.message}` })
       resolve({ success: false, error: err.message })
     })
@@ -452,29 +514,38 @@ ipcMain.handle('ollama:install-ollama', async (event, installerPath: string) => 
     }
   }
 
-  sendProgress(event, { stage: 'installing', percent: 50, message: 'Installing Ollama (this may take 1-2 minutes)...' })
+  sendProgress(event, { stage: 'installing', percent: 0, message: 'Installing Ollama...' })
 
   return new Promise((resolve) => {
     if (process.platform === 'win32') {
       const startTime = Date.now()
       const progressTimer = setInterval(() => {
         const elapsed = Date.now() - startTime
-        const pct = Math.min(50 + Math.round((elapsed / 120000) * 25), 74)
+        const pct = Math.min(Math.round((elapsed / 120000) * 75), 74)
         sendProgress(event, { stage: 'installing', percent: pct, message: `Installing Ollama... ${Math.round(elapsed / 1000)}s` })
-      }, 2000)
+      }, 1000)
 
-      const proc = execFile(installerPath, ['/S'], (err) => {
+      const proc = execFile(installerPath, ['/S'])
+      activeProcess = proc
+      proc.on('close', (code) => {
         clearInterval(progressTimer)
-        if (err) {
-          sendProgress(event, { stage: 'error', percent: 0, message: `Install failed: ${err.message}` })
-          resolve({ success: false, error: err.message })
-        } else {
+        activeProcess = null
+        if (code === 0) {
           sendProgress(event, { stage: 'installed', percent: 80, message: 'Ollama installed successfully' })
           resolve({ success: true })
+        } else {
+          sendProgress(event, { stage: 'error', percent: 0, message: `Install failed with code ${code}` })
+          resolve({ success: false, error: `Exit code ${code}` })
         }
       })
+      proc.on('error', (err) => {
+        clearInterval(progressTimer)
+        activeProcess = null
+        sendProgress(event, { stage: 'error', percent: 0, message: `Install failed: ${err.message}` })
+        resolve({ success: false, error: err.message })
+      })
       proc.stdout?.on('data', (data) => {
-        sendProgress(event, { stage: 'installing', percent: 65, message: data.toString().trim() })
+        sendProgress(event, { stage: 'installing', percent: 60, message: data.toString().trim() })
       })
     } else {
       resolve({ success: false, error: 'Unsupported platform' })
@@ -489,6 +560,7 @@ ipcMain.handle('ollama:pull-model', async (event, modelName: string) => {
     sendProgress(event, { stage: 'pulling', percent: 0, message: `Pulling ${modelName}...` })
 
     const proc = spawn(bin, ['pull', modelName], { shell: true })
+    activeProcess = proc
 
     proc.stdout?.on('data', (data: Buffer) => {
       const lines = data.toString().trim().split('\n')
@@ -522,6 +594,7 @@ ipcMain.handle('ollama:pull-model', async (event, modelName: string) => {
     })
 
     proc.on('close', (code) => {
+      activeProcess = null
       if (code === 0) {
         sendProgress(event, { stage: 'ready', percent: 100, message: `${modelName} is ready!` })
         resolve({ success: true })
@@ -532,8 +605,135 @@ ipcMain.handle('ollama:pull-model', async (event, modelName: string) => {
     })
 
     proc.on('error', (err) => {
+      activeProcess = null
       sendProgress(event, { stage: 'error', percent: 0, message: err.message })
       resolve({ success: false, error: err.message })
     })
   })
+})
+
+ipcMain.on('ollama:cancel', () => {
+  if (activeProcess) {
+    try { activeProcess.kill() } catch { /* process may already be dead */ }
+    activeProcess = null
+  }
+  if (activeRequest) {
+    try { activeRequest.destroy() } catch { /* request may already be closed */ }
+    activeRequest = null
+  }
+})
+
+ipcMain.handle('ollama:list-pulled', async () => {
+  const bin = getOllamaBinary()
+  try {
+    const result = spawnSync(bin, ['list'], { encoding: 'utf-8', timeout: 10000 })
+    if (result.status !== 0) return { error: result.stderr || 'Failed to list models' }
+    const lines = result.stdout.split('\n').filter(Boolean)
+    const models = lines.slice(1).map(line => {
+      const parts = line.split(/\s{2,}/)
+      return { name: (parts[0] || '').replace(':latest', ''), size: parts[2] || '' }
+    }).filter(m => m.name)
+    return { models }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+ipcMain.handle('install:cleanup-temp', async (_event, tmpDir: string) => {
+  try {
+    const { rmSync } = require('fs')
+    if (tmpDir && tmpDir.includes('agent0-ollama')) {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+    return { success: true }
+  } catch {
+    return { success: false }
+  }
+})
+
+// ─── Document Reading ───────────────────────────────────────────────────
+
+ipcMain.handle('documents:read-pdf', async (_event, filePath: string) => {
+  try {
+    if (!isPathSafe(filePath)) return { error: 'Access denied: outside workspace' }
+    return await readPdfFile(filePath)
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+ipcMain.handle('documents:read-pdf-unsafe', async (_event, filePath: string) => {
+  try {
+    return await readPdfFile(filePath)
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+async function readPdfFile(filePath: string) {
+  const buf = await readFile(filePath)
+  const parser = new PDFParse({ data: buf })
+  await parser.load()
+  const [textResult, infoResult] = await Promise.all([parser.getText(), parser.getInfo()])
+  await parser.destroy()
+  return {
+    content: textResult.text,
+    pages: textResult.total,
+    info: {
+      pdfVersion: infoResult.info?.PDFFormatVersion,
+      isEncrypted: !!infoResult.info?.EncryptFilterName
+    }
+  }
+}
+
+ipcMain.handle('documents:read-docx', async (_event, filePath: string) => {
+  try {
+    if (!isPathSafe(filePath)) return { error: 'Access denied: outside workspace' }
+    return await readDocxFile(filePath)
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+ipcMain.handle('documents:read-docx-unsafe', async (_event, filePath: string) => {
+  try {
+    return await readDocxFile(filePath)
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+async function readDocxFile(filePath: string) {
+  const result = await mammoth.extractRawText({ path: filePath })
+  return { content: result.value }
+}
+
+ipcMain.handle('documents:read-pdf-buffer', async (_event, { base64 }: { base64: string }) => {
+  try {
+    const buf = Buffer.from(base64, 'base64')
+    const parser = new PDFParse({ data: buf })
+    await parser.load()
+    const [textResult, infoResult] = await Promise.all([parser.getText(), parser.getInfo()])
+    await parser.destroy()
+    return {
+      content: textResult.text,
+      pages: textResult.total,
+      info: {
+        pdfVersion: infoResult.info?.PDFFormatVersion,
+        isEncrypted: !!infoResult.info?.EncryptFilterName
+      }
+    }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+})
+
+ipcMain.handle('documents:read-docx-buffer', async (_event, { base64 }: { base64: string }) => {
+  try {
+    const buf = Buffer.from(base64, 'base64')
+    const result = await mammoth.extractRawText({ buffer: buf })
+    return { content: result.value }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
 })

@@ -51,7 +51,7 @@ export class OpenRouterProvider extends AIProvider {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
           'HTTP-Referer': 'https://agent0.app',
-          'X-Title': 'Agent0'
+          'X-Title': 'Agent O'
         },
         body: JSON.stringify({
           model: modelId,
